@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://nds-cal.tawuahc.workers.dev; form-action 'none'; base-uri 'none'; frame-ancestors 'none'">
+<title>nds-cal｜分類管理測試</title>
+<style>
+:root { color-scheme:dark; font-family:system-ui,-apple-system,'Microsoft JhengHei',sans-serif; }
+* { box-sizing:border-box; }
+body { margin:0; min-height:100vh; background:#111722; color:#edf2ff; line-height:1.55; padding:22px; }
+main { max-width:900px; margin:36px auto; }
+h1 { font-size:clamp(22px,4vw,30px); margin:0 0 8px; }
+h2 { font-size:20px; margin:0 0 16px; }
+p { color:#bcc8df; margin:4px 0 16px; }
+.note { font-size:13px; color:#b6c4dc; }
+.panel { background:#232d40; border:1px solid #394660; border-radius:17px; padding:24px; margin:18px 0; }
+label { display:block; font-weight:650; font-size:14px; margin:10px 0 6px; }
+input { width:100%; background:#111b2b; border:1px solid #66748e; color:white; padding:11px 12px; border-radius:9px; font:inherit; min-width:0; }
+input:focus { outline:2px solid #95b4ff; outline-offset:1px; }
+button { border:0; border-radius:9px; background:#426ac1; color:white; font:inherit; font-weight:650; padding:10px 16px; cursor:pointer; }
+button.secondary { background:#495973; }
+button.danger { background:#9c3d4d; }
+button:disabled { opacity:.55; cursor:wait; }
+.actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:16px; }
+.grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr) 120px; gap:12px; align-items:end; }
+.color-cell { display:flex; gap:10px; align-items:center; }
+input[type=color] { width:52px; min-width:52px; height:44px; padding:4px; cursor:pointer; }
+.status { margin-top:18px; border-radius:10px; background:#121d30; padding:13px; min-height:48px; overflow-wrap:anywhere; }
+.status[data-error=true] { border-left:3px solid #ea8e99; }
+.hidden { display:none!important; }
+.category-list { display:grid; gap:10px; }
+.item { border:1px solid #495973; border-radius:12px; padding:14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.swatch { width:20px; height:20px; flex:0 0 20px; border-radius:5px; border:1px solid #d8e2fa99; }
+.item-info { flex:1; min-width:140px; }
+.item-info strong { font-size:16px; }
+.item-info small { display:block; color:#b6c4dc; }
+.empty { color:#b6c4dc; border:1px dashed #66748e; padding:24px; border-radius:12px; text-align:center; }
+.link { color:#b9d0ff; }
+@media(max-width:650px) { main { margin:12px auto; } .panel { padding:18px; } .grid { grid-template-columns:1fr; } .item .actions { width:100%; } }
+</style>
+</head>
+<body>
+<main>
+<h1>nds-cal｜活動分類管理</h1>
+<p>開發測試版。新增、修改或刪除分類會直接更新雲端 D1 資料庫。</p>
+<p class="note">此頁面不是正式管理員後台。只在受信任的裝置測試；登入憑證只留在本頁記憶體，重新整理後便需再登入。</p>
+<section class="panel" id="loginPanel">
+<h2>管理員登入</h2>
+<form id="loginForm">
+<label for="username">使用者名稱</label>
+<input id="username" name="username" autocomplete="username" value="admin" required maxlength="100">
+<label for="password">密碼</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required>
+<div class="actions"><button id="loginButton" type="submit">登入</button></div>
+</form>
+</section>
+<section id="adminPanel" class="hidden">
+<div class="panel">
+<h2>管理員操作</h2>
+<p>目前登入：<strong id="userDisplay">admin</strong></p>
+<div class="actions"><button class="secondary" id="refreshButton" type="button">重新整理分類</button><button class="secondary" id="logoutButton" type="button">登出</button></div>
+</div>
+<div class="panel">
+<h2 id="formHeading">新增分類</h2>
+<form id="categoryForm">
+<div class="grid">
+<div><label for="categoryName">分類名稱</label><input id="categoryName" maxlength="80" required placeholder="例如：學生聚會"></div>
+<div><label for="categoryColor">分類顏色</label><div class="color-cell"><input id="categoryColor" type="color" value="#4c84e2" aria-label="選擇分類顏色"><input id="colorCode" value="#4C84E2" maxlength="7" aria-label="顏色十六進位代碼"></div></div>
+<div><label for="sortOrder">排序</label><input id="sortOrder" type="number" min="-10000" max="10000" step="1" value="0" required></div>
+</div>
+<div class="actions"><button id="saveButton" type="submit">新增分類</button><button id="cancelButton" type="button" class="secondary hidden">取消編輯</button></div>
+</form>
+</div>
+<div class="panel">
+<h2>現有分類</h2>
+<div class="category-list" id="categoryList"><div class="empty">正在讀取分類…</div></div>
+</div>
+</section>
+<div class="status" role="status" aria-live="polite" id="status">請先登入管理員。</div>
+<p class="note">安全提示：不要分享登入 Token、密碼或包含它們的截圖。共用管理員帳戶在正式使用前仍需加強防護及更換曾曝光的密碼。</p>
+</main>
+<script>
+(() => {
+'use strict';
+const API = 'https://nds-cal.tawuahc.workers.dev';
+const el = id => document.getElementById(id);
+let token = null;
+let selectedId = null;
+let categories = [];
+let busy = false;
+const status = (message, error=false) => { el('status').textContent = message; el('status').dataset.error = String(error); };
+function setLoggedIn(value) {
+  el('loginPanel').classList.toggle('hidden',value);
+  el('adminPanel').classList.toggle('hidden',!value);
+}
+function setBusy(value) {
+  busy = value;
+  ['loginButton','refreshButton','logoutButton','saveButton','cancelButton'].forEach(id => el(id).disabled = value);
+}
+async function api(path, method='GET', body) {
+  const headers = {};
+  if(token) headers.Authorization = 'Bearer ' + token;
+  if(body !== undefined) headers['Content-Type'] = 'application/json';
+  const response = await fetch(API + path, { method, headers, cache:'no-store', body:body === undefined ? undefined : JSON.stringify(body) });
+  const data = await response.json().catch(() => ({error:'伺服器回傳內容無法解析'}));
+  if(!response.ok) {
+    if(response.status === 401) { token = null; setLoggedIn(false); }
+    throw new Error(`HTTP ${response.status}：${data.error || '未知錯誤'}`);
+  }
+  return data;
+}
+function resetForm() {
+  selectedId = null;
+  el('categoryForm').reset();
+  el('categoryColor').value = '#4c84e2';
+  el('colorCode').value = '#4C84E2';
+  el('sortOrder').value = '0';
+  el('formHeading').textContent = '新增分類';
+  el('saveButton').textContent = '新增分類';
+  el('cancelButton').classList.add('hidden');
+}
+function actionButton(label, action, category, cls='secondary') {
+  const b = document.createElement('button');
+  b.type='button'; b.textContent=label; b.className=cls;
+  b.addEventListener('click',() => action(category));
+  return b;
+}
+function renderCategories() {
+  const root = el('categoryList');
+  root.replaceChildren();
+  if(!categories.length) {
+    const empty = document.createElement('div'); empty.className='empty'; empty.textContent='目前沒有分類。可以先在上方新增第一個分類。'; root.append(empty); return;
+  }
+  for(const cat of categories) {
+    const item = document.createElement('div'); item.className='item';
+    const swatch = document.createElement('span'); swatch.className='swatch'; swatch.style.backgroundColor = /^#[0-9a-fA-F]{6}$/.test(cat.color) ? cat.color : '#808080';
+    const info = document.createElement('div'); info.className='item-info';
+    const strong = document.createElement('strong'); strong.textContent = cat.name;
+    const small = document.createElement('small'); small.textContent = `顏色 ${cat.color} · 排序 ${cat.sort_order}`;
+    info.append(strong,small);
+    const actions = document.createElement('div'); actions.className='actions';
+    actions.append(actionButton('編輯',editCategory,cat), actionButton('刪除',deleteCategory,cat,'danger'));
+    item.append(swatch,info,actions); root.append(item);
+  }
+}
+async function refreshCategories() {
+  const response = await api('/api/admin/categories');
+  categories = Array.isArray(response.categories) ? response.categories : [];
+  renderCategories();
+  status(`已載入 ${categories.length} 個分類。`);
+}
+function editCategory(cat) {
+  selectedId = cat.id;
+  el('categoryName').value = cat.name;
+  el('categoryColor').value = cat.color;
+  el('colorCode').value = cat.color;
+  el('sortOrder').value = String(cat.sort_order);
+  el('formHeading').textContent = '編輯分類';
+  el('saveButton').textContent = '儲存修改';
+  el('cancelButton').classList.remove('hidden');
+  el('categoryName').focus();
+  status(`正在編輯「${cat.name}」。`);
+}
+async function deleteCategory(cat) {
+  if(busy) return;
+  if(!confirm(`確定刪除分類「${cat.name}」？此操作會立即修改資料庫。`)) return;
+  setBusy(true);
+  try {
+    await api('/api/admin/categories/' + encodeURIComponent(cat.id), 'DELETE');
+    resetForm();
+    await refreshCategories();
+    status(`已刪除分類「${cat.name}」。`);
+  } catch(e) { status('刪除失敗：' + e.message,true); }
+  finally {setBusy(false);}
+}
+el('categoryColor').addEventListener('input',() => {el('colorCode').value=el('categoryColor').value.toUpperCase();});
+el('colorCode').addEventListener('change',() => {
+  const code=el('colorCode').value.trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(code)) el('categoryColor').value=code;
+});
+el('cancelButton').addEventListener('click',() => { resetForm(); status('已取消編輯。'); });
+el('loginForm').addEventListener('submit',async e => {
+  e.preventDefault(); if(busy) return;
+  setBusy(true); status('正在驗證登入…');
+  const username = el('username').value;
+  const password = el('password').value;
+  el('password').value='';
+  try {
+    const data = await api('/api/admin/login','POST',{username,password});
+    if(!data.success || typeof data.token!=='string') throw new Error('登入憑證格式不正確');
+    token=data.token;
+    const me=await api('/api/admin/me');
+    el('userDisplay').textContent=me.username || username;
+    setLoggedIn(true);
+    await refreshCategories();
+    status('登入成功。你現在可以新增及管理分類。');
+  } catch(e) { status('登入失敗：'+e.message,true); }
+  finally {setBusy(false);}
+});
+el('refreshButton').addEventListener('click',async() => {
+  if(busy) return; setBusy(true);
+  try{ await refreshCategories(); }catch(e){status('讀取失敗：'+e.message,true);}finally{setBusy(false);}
+});
+el('logoutButton').addEventListener('click',async() => {
+  if(busy) return; setBusy(true);
+  try { await api('/api/admin/logout','POST'); token=null; selectedId=null; categories=[]; setLoggedIn(false); resetForm(); status('已登出。'); }
+  catch(e){status('登出失敗：'+e.message,true);}
+  finally{setBusy(false);}
+});
+el('categoryForm').addEventListener('submit',async e => {
+  e.preventDefault(); if(busy) return;
+  const name=el('categoryName').value.trim();
+  const color=el('colorCode').value.trim().toUpperCase();
+  const order=Number(el('sortOrder').value);
+  if(!name || name.length>80) return status('分類名稱須為 1–80 個字元。',true);
+  if(!/^#[0-9A-F]{6}$/.test(color)) return status('顏色代碼必須是 #RRGGBB，例如 #4C84E2。',true);
+  if(!Number.isInteger(order)||order < -10000||order>10000) return status('排序必須介乎 -10000 至 10000。',true);
+  const before = selectedId !== null;
+  const id = selectedId;
+  setBusy(true);
+  try {
+    await api(before ? '/api/admin/categories/'+encodeURIComponent(id) : '/api/admin/categories',before?'PUT':'POST',{
+      name,color,sort_order:order
+    });
+    resetForm();
+    await refreshCategories();
+    status(before?'分類修改成功。':'分類新增成功。');
+  } catch(e) {status('儲存失敗：'+e.message,true);}
+  finally{setBusy(false);}
+});
+})();
+</script>
+</body>
+</html>
