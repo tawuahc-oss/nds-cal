@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://nds-cal.tawuahc.workers.dev; form-action 'none'; base-uri 'none'">
+<title>nds-cal｜管理員登入測試</title>
+<style>
+:root{color-scheme:light dark;font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f6fa;color:#202532}.panel{box-sizing:border-box;width:min(92vw,440px);background:white;padding:28px;border-radius:16px;box-shadow:0 5px 30px #141a2514}h1{font-size:23px;margin:0 0 8px}p{color:#596478;font-size:14px;line-height:1.6}label{display:block;font-weight:650;margin-top:17px;margin-bottom:6px}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #aeb7c4;border-radius:9px;font-size:16px;background:white;color:#202532}button{cursor:pointer;border:0;border-radius:9px;padding:12px 16px;font-size:15px;font-weight:650;background:#3154a6;color:white}button:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.secondary{background:#e9eef8;color:#253c72}.output{margin-top:20px;background:#f5f7fa;border-radius:8px;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:24px;font-size:14px}small{display:block;color:#667287;line-height:1.6;margin-top:15px}#logged{display:none}body{padding:24px}@media(prefers-color-scheme:dark){body{background:#131721;color:#e9edf7}.panel{background:#252c39}.output{background:#1b2230}input{background:#18202e;color:white;border-color:#5d6879}p,small{color:#b5c0d2}.secondary{background:#44506a;color:white}}
+</style>
+</head>
+<body>
+<main class="panel">
+<h1>nds-cal｜管理員登入測試</h1>
+<p>這是開發測試頁面，並非正式管理員後台。請只在自己的裝置上測試。</p>
+<section id="loggedOut">
+<form id="loginForm">
+<label for="username">管理員使用者名稱</label>
+<input id="username" name="username" autocomplete="username" required maxlength="100">
+<label for="password">密碼</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required>
+<div class="actions"><button id="loginButton" type="submit">登入測試</button></div>
+</form>
+</section>
+<section id="logged">
+<p>目前測試頁已持有登入憑證（只存放在此分頁的記憶體中）。</p>
+<div class="actions"><button class="secondary" id="checkButton" type="button">檢查登入狀態</button><button id="logoutButton" type="button">登出</button></div>
+</section>
+<div role="status" aria-live="polite" id="result" class="output">尚未登入。</div>
+<small>不要在截圖中展示密碼、登入憑證或完整的瀏覽器開發者工具請求內容。重新整理頁面會清除本頁暫存的登入憑證。</small>
+</main>
+<script>
+(() => {
+  'use strict';
+  const API='https://nds-cal.tawuahc.workers.dev';
+  const loginForm=document.querySelector('#loginForm');
+  const out=document.querySelector('#result');
+  const loggedOut=document.querySelector('#loggedOut');
+  const logged=document.querySelector('#logged');
+  const loginButton=document.querySelector('#loginButton');
+  const checkButton=document.querySelector('#checkButton');
+  const logoutButton=document.querySelector('#logoutButton');
+  let token=null;
+  const status=(s)=>{out.textContent=s};
+  const signedIn=(v)=>{loggedOut.style.display=v?'none':'block';logged.style.display=v?'block':'none'};
+  async function request(path,method='GET',body=null){
+    const headers={};
+    if(body!==null) headers['Content-Type']='application/json';
+    if(token) headers['Authorization']='Bearer '+token;
+    const resp=await fetch(API+path,{method,headers,body:body===null?undefined:JSON.stringify(body),cache:'no-store'});
+    const data=await resp.json().catch(()=>({error:'伺服器沒有回傳有效 JSON'}));
+    return {resp,data};
+  }
+  loginForm.addEventListener('submit',async e=>{
+    e.preventDefault();loginButton.disabled=true;status('正在驗證登入…');
+    const username=document.querySelector('#username').value;
+    const passwordField=document.querySelector('#password');
+    const password=passwordField.value;
+    passwordField.value='';
+    try{
+      const {resp,data}=await request('/api/admin/login','POST',{username,password});
+      if(resp.ok&&data.success===true&&typeof data.token==='string'){
+        token=data.token;signedIn(true);status('登入成功。可以按「檢查登入狀態」驗證。');
+      }else{
+        status('登入未成功（HTTP '+resp.status+'）：'+(data.error||'未知錯誤'));
+      }
+    }catch{
+      status('無法連接 API。請確認此頁已經透過 GitHub Pages 開啟，並檢查 Worker 是否已部署。');
+    }finally{loginButton.disabled=false}
+  });
+  checkButton.addEventListener('click',async()=>{
+    checkButton.disabled=true;status('正在檢查登入狀態…');
+    try{
+      const {resp,data}=await request('/api/admin/me');
+      if(resp.ok&&data.authenticated===true){status('登入狀態正常：authenticated = true。');}
+      else{status('登入狀態檢查失敗（HTTP '+resp.status+'）：'+(data.error||'未知錯誤'));if(resp.status===401){token=null;signedIn(false)}}
+    }catch{status('無法連接 API。')}
+    finally{checkButton.disabled=false}
+  });
+  logoutButton.addEventListener('click',async()=>{
+    logoutButton.disabled=true;status('正在登出…');
+    try{
+      const {resp,data}=await request('/api/admin/logout','POST');
+      if(resp.ok&&data.success===true){status('已登出。');token=null;signedIn(false)}
+      else{status('登出失敗（HTTP '+resp.status+'）：'+(data.error||'未知錯誤'))}
+    }catch{status('無法連接 API；尚未確認伺服器端登出成功。')}
+    finally{logoutButton.disabled=false}
+  });
+})();
+</script>
+</body>
+</html>
