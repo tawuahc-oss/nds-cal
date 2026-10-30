@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://nds-cal.tawuahc.workers.dev; form-action 'none'; base-uri 'none'; frame-ancestors 'none'">
+<title>nds-cal｜活動管理測試</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,'Microsoft JhengHei',sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#111722;color:#edf2ff;line-height:1.6;padding:18px}main{max-width:950px;margin:25px auto}h1{font-size:clamp(22px,4vw,30px);margin:0 0 8px}h2{font-size:20px;margin:0 0 14px}p{color:#c3cfe4}small,.note{font-size:13px;color:#b8c5db}.panel{background:#232d40;border:1px solid #42516a;border-radius:16px;padding:22px;margin:16px 0}label{display:block;font-size:14px;font-weight:650;margin:10px 0 5px}input,select,textarea{width:100%;min-width:0;padding:10px 12px;border:1px solid #66748e;border-radius:8px;background:#131d2d;color:#f4f7ff;font:inherit}textarea{resize:vertical}input:focus,select:focus,textarea:focus{outline:2px solid #98b6ff;outline-offset:1px}button{border:0;background:#3d65bb;color:#fff;padding:10px 15px;border-radius:8px;font:inherit;font-weight:650;cursor:pointer}button.secondary{background:#4b5c77}button.danger{background:#993c4b}button:disabled{opacity:.6;cursor:wait}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:13px}.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.hidden{display:none!important}.status{padding:13px;background:#121d30;border-radius:10px;min-height:44px;overflow-wrap:anywhere}.status[data-error="true"]{border-left:3px solid #f29da9}.item{border:1px solid #52617a;border-radius:12px;padding:14px;margin:10px 0;display:flex;flex-wrap:wrap;gap:14px;align-items:center}.item-body{flex:1;min-width:200px;overflow-wrap:anywhere}.item-body strong{font-size:16px}.item-body small{display:block}.badge{display:inline-block;background:#364862;border-radius:4px;padding:2px 6px;font-size:12px;margin-left:8px}.empty{border:1px dashed #52617a;padding:23px;text-align:center;border-radius:10px;color:#b8c5db}.checklabel{display:flex;gap:10px;align-items:center}.checklabel input{width:auto}a{color:#acc8ff}@media(max-width:650px){body{padding:12px}main{margin:8px auto}.panel{padding:16px}.two,.three{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<h1>nds-cal｜活動管理測試</h1>
+<p>開發測試版：活動新增、修改和刪除會直接更新 D1。暫不支援重複活動管理。</p>
+<p class="note">請在受信任的裝置使用。登入 Token 只存於本頁記憶體，重新整理便會清除。</p>
+<section class="panel" id="loginPanel"><h2>管理員登入</h2><form id="loginForm">
+<label for="username">使用者名稱</label><input id="username" value="admin" autocomplete="username" required>
+<label for="password">密碼</label><input id="password" type="password" autocomplete="current-password" required>
+<div class="actions"><button id="loginBtn" type="submit">登入</button></div></form></section>
+<section id="adminPanel" class="hidden">
+<div class="panel"><h2>管理員操作</h2><p>目前登入：<strong id="userDisplay"></strong></p><div class="actions"><button id="refreshBtn" type="button" class="secondary">重新整理活動</button><button id="logoutBtn" type="button" class="secondary">登出</button><a href="./categories-admin.html">分類管理頁面</a></div></div>
+<div class="panel"><h2 id="formTitle">新增活動</h2><form id="eventForm">
+<label for="title">活動名稱（必填）</label><input id="title" maxlength="160" required placeholder="例如：測試活動">
+<div class="two"><div><label for="category">活動分類</label><select id="category"><option value="">不指定分類</option></select></div><div><label for="location">地點</label><input id="location" maxlength="300" placeholder="例如：教會禮堂"></div></div>
+<div class="actions"><label class="checklabel" for="allDay"><input id="allDay" type="checkbox" checked>全日活動</label></div>
+<div class="two"><div><label for="start">開始日期／時間</label><input id="start" type="date" required></div><div><label for="end">結束日期／時間（可留空）</label><input id="end" type="date"></div></div>
+<p class="note">時間一律使用香港時間。全日活動的結束日期包含當日。</p>
+<label for="description">活動描述</label><textarea id="description" maxlength="2000" rows="3"></textarea>
+<label for="notes">備註</label><textarea id="notes" maxlength="1000" rows="2"></textarea>
+<div class="actions"><button id="saveBtn" type="submit">新增活動</button><button id="cancelBtn" class="secondary hidden" type="button">取消編輯</button></div>
+</form></div>
+<div class="panel"><h2>現有活動</h2><div id="eventList"><div class="empty">正在讀取活動…</div></div></div>
+</section>
+<div class="status" id="status" role="status" aria-live="polite">請先登入。</div>
+<p class="note">此為開發測試頁面，尚未完成正式上線所需的所有安全檢查。不要截圖分享密碼或登入 Token。</p>
+</main>
+<script>
+(() => {'use strict';
+const API='https://nds-cal.tawuahc.workers.dev';
+const el=id=>document.getElementById(id);
+let token=null,events=[],categories=[],selectedId=null,busy=false;
+function status(message,error=false){el('status').textContent=message;el('status').dataset.error=String(error)}
+function setBusy(val){busy=val;for(const id of ['loginBtn','refreshBtn','logoutBtn','saveBtn','cancelBtn'])el(id).disabled=val}
+function logged(val){el('loginPanel').classList.toggle('hidden',val);el('adminPanel').classList.toggle('hidden',!val)}
+async function api(path,method='GET',body){
+ const headers={};if(token)headers.Authorization='Bearer '+token;
+ if(body!==undefined)headers['Content-Type']='application/json';
+ const res=await fetch(API+path,{method,headers,cache:'no-store',body:body===undefined?undefined:JSON.stringify(body)});
+ const data=await res.json().catch(()=>({error:'回傳不是 JSON'}));
+ if(!res.ok){if(res.status===401){token=null;logged(false)}throw Error(`HTTP ${res.status}：${data.error||'未知錯誤'}`)}
+ return data;
+}
+const pad=v=>String(v).padStart(2,'0');
+function localValue(date){
+ if(!date)return '';
+ // Date strings from the database are either YYYY-MM-DD or HK-local ISO with +08:00.
+ return date.length===10?date:date.slice(0,16);
+}
+function resetForm(){selectedId=null;el('eventForm').reset();el('allDay').checked=true;el('start').type='date';el('end').type='date';el('formTitle').textContent='新增活動';el('saveBtn').textContent='新增活動';el('cancelBtn').classList.add('hidden');}
+function updateDateInputs(){
+ const isAll=el('allDay').checked;
+ for(const id of ['start','end']){
+  const input=el(id);const value=input.value;
+  input.type=isAll?'date':'datetime-local';
+  if(isAll && value.length>10)input.value=value.slice(0,10);
+  else if(!isAll && value.length===10)input.value=value+'T09:00';
+ }
+}
+function isoFromControl(value,allDay){
+ if(!value)return null;
+ if(allDay)return value;
+ return value.length===16?value+':00+08:00':value+ '+08:00';
+}
+function formData(){
+ const allDay=el('allDay').checked;
+ return {title:el('title').value.trim(),description:el('description').value,
+  location:el('location').value,notes:el('notes').value,
+  all_day:allDay,category_id:el('category').value||null,
+  start_at:isoFromControl(el('start').value,allDay),end_at:isoFromControl(el('end').value,allDay)};
+}
+function renderList(){
+ const root=el('eventList');root.replaceChildren();
+ if(!events.length){const div=document.createElement('div');div.className='empty';div.textContent='目前沒有活動，可以先新增測試活動。';root.append(div);return}
+ for(const ev of events){
+  const item=document.createElement('div');item.className='item';
+  const b=document.createElement('div');b.className='item-body';
+  const title=document.createElement('strong');title.textContent=ev.title;
+  const type=document.createElement('span');type.className='badge';type.textContent=ev.all_day?'全日':'指定時間';
+  const detail=document.createElement('small');detail.textContent=[ev.start_at,ev.end_at?'至 '+ev.end_at:null,ev.category_name,ev.location].filter(Boolean).join(' · ');
+  b.append(title,type,detail);
+  const actions=document.createElement('div');actions.className='actions';
+  const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='編輯';edit.addEventListener('click',()=>editEvent(ev));
+  const del=document.createElement('button');del.type='button';del.className='danger';del.textContent='刪除';del.addEventListener('click',()=>deleteEvent(ev));
+  actions.append(edit,del);item.append(b,actions);root.append(item);
+ }
+}
+async function refresh(){
+ const [eventResult,catResult]=await Promise.all([api('/api/admin/events'),api('/api/categories')]);
+ events=Array.isArray(eventResult.events)?eventResult.events:[];
+ categories=Array.isArray(catResult.categories)?catResult.categories:[];
+ const current=el('category').value;el('category').replaceChildren();
+ const opt=document.createElement('option');opt.value='';opt.textContent='不指定分類';el('category').append(opt);
+ for(const c of categories){const op=document.createElement('option');op.value=c.id;op.textContent=c.name;el('category').append(op)}
+ el('category').value=current;
+ renderList();status(`已載入 ${events.length} 項活動。`);
+}
+function editEvent(ev){
+ selectedId=ev.id;el('title').value=ev.title;el('description').value=ev.description||'';
+ el('location').value=ev.location||'';el('notes').value=ev.notes||'';
+ el('allDay').checked=!!ev.all_day;
+ el('start').type=ev.all_day?'date':'datetime-local';el('end').type=el('start').type;
+ el('start').value=localValue(ev.start_at);el('end').value=localValue(ev.end_at);
+ el('category').value=ev.category_id||'';el('formTitle').textContent='編輯活動';el('saveBtn').textContent='儲存修改';el('cancelBtn').classList.remove('hidden');
+ el('title').focus();status(`正在編輯「${ev.title}」。`);
+}
+async function deleteEvent(ev){
+ if(busy||!confirm(`確定刪除活動「${ev.title}」？此操作會直接修改資料庫。`))return;
+ setBusy(true);try{await api('/api/admin/events/'+encodeURIComponent(ev.id),'DELETE');resetForm();await refresh();status(`已刪除「${ev.title}」。`)}catch(e){status('刪除失敗：'+e.message,true)}finally{setBusy(false)}
+}
+el('allDay').addEventListener('change',updateDateInputs);
+el('cancelBtn').addEventListener('click',()=>{resetForm();status('已取消編輯。')});
+el('loginForm').addEventListener('submit',async event=>{
+ event.preventDefault();if(busy)return;setBusy(true);status('正在登入…');
+ const username=el('username').value,password=el('password').value;el('password').value='';
+ try{const result=await api('/api/admin/login','POST',{username,password});if(!result.token)throw Error('沒有收到登入憑證');token=result.token;
+ const me=await api('/api/admin/me');el('userDisplay').textContent=me.username||username;logged(true);await refresh();status('登入成功，可以管理活動。')}
+ catch(e){status('登入失敗：'+e.message,true)}finally{setBusy(false)}
+});
+el('refreshBtn').addEventListener('click',async()=>{if(busy)return;setBusy(true);try{await refresh()}catch(e){status('讀取失敗：'+e.message,true)}finally{setBusy(false)}});
+el('logoutBtn').addEventListener('click',async()=>{if(busy)return;setBusy(true);try{await api('/api/admin/logout','POST');token=null;events=[];categories=[];resetForm();logged(false);status('已登出。')}catch(e){status('登出失敗：'+e.message,true)}finally{setBusy(false)}});
+el('eventForm').addEventListener('submit',async event=>{
+ event.preventDefault();if(busy)return;
+ const data=formData();if(!data.title||!data.start_at)return status('請填寫活動名稱及開始日期。',true);
+ if(data.end_at && data.end_at<data.start_at)return status('結束時間不能早於開始時間。',true);
+ setBusy(true);
+ try{const editing=!!selectedId;await api(editing?'/api/admin/events/'+encodeURIComponent(selectedId):'/api/admin/events',editing?'PUT':'POST',data);
+ resetForm();await refresh();status(editing?'活動修改成功。':'活動新增成功。')}
+ catch(e){status('儲存失敗：'+e.message,true)}finally{setBusy(false)}
+});
+})();
+</script>
+</body>
+</html>
