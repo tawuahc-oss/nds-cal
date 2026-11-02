@@ -1,0 +1,13 @@
+{
+  "name": "nds-cal",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-30",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nds-cal",
+      "database_id": "ba8f9aca-0e73-4880-b7f6-161b4b94bac7",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

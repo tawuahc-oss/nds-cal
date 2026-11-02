@@ -1,0 +1,10 @@
+import {mkdir,writeFile} from 'node:fs/promises';
+import {readUrl} from './update-holidays.mjs';
+const directory=new URL('../assets/fonts/',import.meta.url);
+await mkdir(directory,{recursive:true});
+const cache=new URL('../.local-backups/',import.meta.url);
+await mkdir(cache,{recursive:true});
+const base='https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstc/';
+await writeFile(new URL('NotoSansTC-variable.ttf',cache),await readUrl(base+'NotoSansTC%5Bwght%5D.ttf'));
+await writeFile(new URL('OFL.txt',directory),await readUrl(base+'OFL.txt'));
+console.log('Variable font cached. Run scripts/prepare-pdf-font.py with fonttools to generate the vendored Regular TTF; do not publish the variable source.');

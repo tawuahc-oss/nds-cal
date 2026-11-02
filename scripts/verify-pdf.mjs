@@ -1,0 +1,13 @@
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import lunar from 'lunar-javascript';
+import {calendarPdf,detailsPdf} from '../assets/pdf-source.js';
+const {Solar}=lunar,from='2026-11-01',to='2026-11-30';
+const fontBytes=await readFile(new URL('../assets/fonts/NotoSansTC.ttf',import.meta.url));
+const backup=JSON.parse(await readFile(new URL('../.local-backups/calendar-only-baseline-2026-11-03.json',import.meta.url),'utf8'));
+backup.tables.recurrence_rules[0].by_weekday='1MO';
+const events=[{...backup.tables.events[0],recurrence_rule_id:backup.tables.recurrence_rules[0].id,category_name:'教會聚會',title:'每月第一個星期一聚會',location:'教會禮堂',description:'繁體中文測試：活動名稱、日期、時間、地點、分類、描述及備註。',notes:'此文件是版面驗證範例。'}];
+const holidays=JSON.parse(await readFile(new URL('../assets/data/hk-holidays.json',import.meta.url),'utf8')).events;
+await mkdir(new URL('../output/pdf/',import.meta.url),{recursive:true});
+await writeFile(new URL('../output/pdf/calendar-sample.pdf',import.meta.url),await calendarPdf({from,to,events,fontBytes,Solar,holidays}));
+await writeFile(new URL('../output/pdf/details-sample.pdf',import.meta.url),await detailsPdf({from,to,events,backup,fontBytes}));
+console.log('Two Traditional Chinese A4 PDF samples generated.');

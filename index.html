@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://nds-cal.tawuahc.workers.dev; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>北區學生月程</title><link rel="stylesheet" href="./assets/calendar.css">
+<script src="./assets/vendor/lunar.js" defer></script><script src="./assets/app.js" type="module"></script>
+</head><body><main class="app">
+<header class="top"><div><div class="brand">THE CHURCH OF GOD IN HONG KONG</div><h1>北區學生月程</h1></div>
+<div class="top-actions"><button id="theme" aria-label="切換夜間模式">日／夜</button><button id="refresh">重新整理</button><button id="loginOpen">管理員登入</button><button id="logout" hidden>登出</button></div></header>
+<div class="monthbar"><h2 class="month-title" id="monthTitle"></h2><nav class="nav" aria-label="月份導覽"><button id="prev" aria-label="上一個月">‹</button><button id="today" class="todaybtn">今天</button><button id="next" aria-label="下一個月">›</button></nav></div>
+<div id="filters" class="calendar-checks" aria-label="活動分類篩選"></div>
+<p id="status" class="message" role="status" aria-live="polite">正在讀取月曆…</p>
+<section class="cal-shell" aria-label="月曆"><div class="weekdays"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div><div id="days" class="days"></div></section>
+<section class="day-events"><div class="events-head"><div><h2 id="dayTitle">當日活動</h2><div class="events-date" id="dayDate"></div></div><button class="primary" id="addEvent" hidden>新增活動</button></div><div id="dayList" class="day-event-list"></div></section>
+<section id="adminPanel" class="admin-panel" hidden><div class="section-head"><h2>管理員後台</h2><span id="adminName"></span></div>
+<p>所有活動及重複規則均可在同一張表格儲存。修改會立即更新月曆。</p><div class="actions"><button id="newEvent" class="primary">新增活動</button><button id="manageCategories">管理分類</button><button id="accountOpen">帳戶安全</button><button id="exportJson">下載完整活動 JSON</button><button id="exportPdf">匯出 A4 PDF</button><button id="archiveOpen">年度封存／兩年保留</button></div><h3>活動與重複系列</h3><div id="adminEvents"></div></section>
+<p class="notice">時區：香港（UTC+8）。農曆及節氣按日期計算。教會活動由獲授權管理員管理。</p>
+</main>
+<dialog id="loginDialog" aria-labelledby="loginTitle"><form id="loginForm"><h2 id="loginTitle">管理員登入</h2>
+<label>使用者名稱<input name="username" autocomplete="username" value="admin" required maxlength="100"></label>
+<label>密碼<input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label>
+<p class="hint">登入保留在目前分頁的工作階段；登出或關閉分頁會清除。請勿在公用電腦保持登入。</p><p id="loginError" class="form-error" role="alert"></p>
+<div class="actions"><button type="submit" class="primary">登入</button><button type="button" id="resetOpen">忘記密碼</button><button type="button" data-close="loginDialog">取消</button></div></form></dialog>
+<dialog id="eventDialog" aria-labelledby="editorTitle"><form id="eventForm"><h2 id="editorTitle">新增活動</h2><p id="editScope" class="hint"></p><fieldset id="eventFields">
+<label>活動名稱<input name="title" required maxlength="160"></label><label class="inline"><input name="all_day" type="checkbox" checked>全日活動</label>
+<div class="form-grid"><label>開始日期／時間<input name="start_at" type="date" required></label><label>結束日期／時間（可留空）<input name="end_at" type="date"></label></div>
+<div class="form-grid"><label>地點<input name="location" maxlength="300"></label><label>分類<select name="category_id"></select></label></div>
+<label>描述<textarea name="description" rows="3" maxlength="2000"></textarea></label><label>備註<textarea name="notes" rows="2" maxlength="1000"></textarea></label>
+<section id="repeatSection" class="repeat-section"><label>重複規則<select name="frequency"><option value="">不重複</option><option value="daily">每日</option><option value="weekly">每星期</option><option value="monthly">每月</option><option value="yearly">每年</option></select></label>
+<div id="repeatFields" hidden><label>每隔多少期<input name="interval_value" type="number" min="1" max="100" value="1"></label>
+<div id="weeklyFields" hidden><span>每星期哪幾天</span><div id="weekdays" class="actions"></div></div>
+<div id="monthlyFields" hidden><label>每月規則<select name="monthly_mode"><option value="same">每月與開始日期同一日（不是第幾個星期幾）</option><option value="day">每月固定日期</option><option value="ordinal">每月第幾個星期幾</option></select></label>
+<label id="monthDayLabel" hidden>每月幾號<input name="day_of_month" type="number" min="1" max="31" value="1"></label>
+<div id="ordinalFields" class="form-grid" hidden><label>第幾個<select name="ordinal"><option value="1">第一個</option><option value="2">第二個</option><option value="3">第三個</option><option value="4">第四個</option><option value="5">第五個（不存在就跳過）</option><option value="-1">最後一個</option></select></label>
+<label>星期幾<select name="ordinal_day"><option value="MO">星期一</option><option value="TU">星期二</option><option value="WE">星期三</option><option value="TH">星期四</option><option value="FR">星期五</option><option value="SA">星期六</option><option value="SU">星期日</option></select></label></div></div>
+<div class="form-grid"><label>重複結束日期<input name="until_date" type="date"></label><label>最多次數<input name="occurrence_count" type="number" min="1" max="10000" placeholder="留空為不限"></label></div><p id="ruleSummary" class="hint"></p><button type="button" id="previewRecurrence">預覽未來一年日期</button><p id="recurrencePreview" class="hint" role="status" aria-live="polite"></p></div></section>
+</fieldset><p id="eventError" class="form-error" role="alert"></p><div class="actions"><button id="saveEvent" type="submit" class="primary">儲存活動</button><button type="button" data-close="eventDialog">取消</button></div></form></dialog>
+<dialog id="detailDialog" aria-labelledby="detailTitle"><h2 id="detailTitle">活動詳情</h2><div id="detailBody"></div><div id="detailActions" class="actions"></div><button data-close="detailDialog">關閉</button></dialog>
+<dialog id="categoriesDialog" aria-labelledby="categoryTitle"><h2 id="categoryTitle">分類管理</h2><form id="categoryForm"><label>分類名稱<input name="name" required maxlength="80"></label>
+<div class="form-grid"><label>分類顏色<input name="color" type="color" value="#87684a"></label><label>排序<input name="sort_order" type="number" min="-10000" max="10000" value="0"></label></div>
+<div class="actions"><button type="submit" class="primary">儲存分類</button><button type="button" id="resetCategory">新增另一分類</button></div></form><p id="categoryError" class="form-error" role="alert"></p><div id="categoryList"></div><button data-close="categoriesDialog">關閉</button></dialog>
+<dialog id="pdfDialog" aria-labelledby="pdfTitle"><form id="pdfForm"><h2 id="pdfTitle">匯出 A4 PDF</h2>
+<label>內容<select name="kind"><option value="calendar">月曆式 PDF（橫向 A4）</option><option value="details">詳細活動紀錄 PDF（直向 A4）</option></select></label>
+<div class="form-grid"><label>開始日期<input name="from" type="date" required></label><label>結束日期<input name="to" type="date" required></label></div>
+<div class="actions"><button id="pdfMonth" type="button">本月</button><button id="pdfYear" type="button">整年</button></div>
+<p class="hint">包含所選期間的所有分類。月曆過多內容會節錄，詳細紀錄包含描述、備註、重複規則及單次例外。字型會在首次匯出時載入。</p>
+<p id="pdfError" class="form-error" role="alert"></p><div class="actions"><button type="submit" class="primary">下載 PDF</button><button type="button" data-close="pdfDialog">取消</button></div>
+</form></dialog>
+<dialog id="accountDialog" aria-labelledby="accountTitle"><form id="accountForm"><h2 id="accountTitle">帳戶安全</h2>
+<p class="hint">這是共用管理員帳戶，改密碼會登出所有使用者。操作紀錄只能追蹤共用帳戶，不能證明是哪位同工操作。</p>
+<label>目前密碼<input name="current_password" type="password" autocomplete="current-password" required maxlength="1024"></label>
+<label>新密碼<input name="new_password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></label>
+<label>再次輸入新密碼<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></label>
+<p class="hint">接受至少 8 字元，拒絕部分常見密碼；無多因素驗證時建議使用 12 字元以上的獨特密語。曾在截圖曝光的密碼應由你在此主動更換。</p>
+<div class="actions"><button type="submit" name="action" value="change" class="primary">更改密碼</button><button type="submit" name="action" value="recovery">產生／更換復原碼</button></div>
+<p class="hint">忘記密碼時可用一次性復原碼重設。新復原碼會作廢舊碼，請下載並離線保管；不要放到 GitHub 或分享。</p>
+<p id="accountResult" role="status"></p><p id="accountError" class="form-error" role="alert"></p><button type="button" data-close="accountDialog">關閉</button>
+</form></dialog>
+<dialog id="resetDialog" aria-labelledby="resetTitle"><form id="resetForm"><h2 id="resetTitle">使用復原碼重設密碼</h2>
+<p class="hint">如尚未產生復原碼，請由持有 Cloudflare 管理權限的人按維護說明處理；網站不會透過公開網址重設帳戶。</p>
+<label>一次性復原碼<input name="recovery_code" autocomplete="off" required minlength="64" maxlength="64"></label>
+<label>新密碼<input name="new_password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"></label>
+<label>再次輸入新密碼<input name="confirm_password" type="password" autocomplete="new-password" required minlength="8" maxlength="128"></label>
+<p id="resetError" class="form-error" role="alert"></p><div class="actions"><button type="submit" class="primary">重設密碼</button><button type="button" data-close="resetDialog">取消</button></div>
+</form></dialog>
+<dialog id="archiveDialog" aria-labelledby="archiveTitle"><h2 id="archiveTitle">年度封存與舊資料清理</h2>
+<p>先按年下載月曆式 PDF、完整活動紀錄 PDF 及 JSON。PDF 供閱讀，JSON 供還原。預設保留今年及去年，未來活動一律保留。</p>
+<label>封存年份<input id="archiveYear" type="number" min="2000" max="9998"></label>
+<div class="actions"><button id="archiveCalendar">年度月曆 PDF</button><button id="archiveDetails">年度詳細 PDF</button><button id="archiveJson">下載還原 JSON</button></div>
+<p class="hint">尚在重複的系列、僅按次數結束的系列、包含任何單次例外的系列會保留，避免破壞未來聚會或修改紀錄。這些舊系列可在檢查後另行處理。</p>
+<label>預覽此日期之前可清理的資料<input id="archiveBefore" type="date"></label><button id="archivePreview">只預覽，不刪除</button>
+<div id="archiveCandidates"></div><p id="archiveError" class="form-error" role="alert"></p>
+<button id="archiveDelete" class="danger" hidden>確認備份後清理預覽項目</button><button data-close="archiveDialog">關閉</button>
+</dialog>
+</body></html>

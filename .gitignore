@@ -1,0 +1,14 @@
+local-server.log
+cloudflare/worker.before-local-cors.json
+
+node_modules/
+.wrangler/
+.local-backups/
+.dev.vars*
+.env*
+*.log
+
+.tooling/
+output/
+tmp/
+dist/

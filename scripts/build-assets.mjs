@@ -1,0 +1,11 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,readFile} from 'node:fs/promises';
+import fontkit from '@pdf-lib/fontkit';
+const root=new URL('../',import.meta.url);
+const font=fontkit.create(await readFile(new URL('assets/fonts/NotoSansTC.ttf',root)));
+if(Object.keys(font.variationAxes||{}).length)throw Error('PDF font must be the tested static Regular TrueType font. Run the font preparation step first.');
+await mkdir(new URL('assets/vendor/',root),{recursive:true});
+await copyFile(new URL('node_modules/lunar-javascript/lunar.js',root),new URL('assets/vendor/lunar.js',root));
+await copyFile(new URL('node_modules/lunar-javascript/LICENSE',root),new URL('assets/vendor/lunar.LICENSE',root));
+await build({entryPoints:[new URL('assets/pdf-source.js',root).pathname.replace(/^\/([A-Za-z]:)/,'$1')],outfile:new URL('assets/pdf.js',root).pathname.replace(/^\/([A-Za-z]:)/,'$1'),bundle:true,format:'esm',platform:'browser',minify:true});
+console.log('Calendar assets built.');

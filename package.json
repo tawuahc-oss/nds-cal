@@ -1,0 +1,22 @@
+{
+  "name": "nds-cal",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "check:live": "node cloudflare/verify-cors.mjs",
+    "build": "node scripts/build-assets.mjs && node scripts/build-site.mjs",
+    "preview": "node scripts/preview.mjs",
+    "update:holidays": "node scripts/update-holidays.mjs",
+    "worker:check": "wrangler deploy --dry-run"
+  },
+  "type": "module",
+  "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
+    "lunar-javascript": "1.7.7",
+    "pdf-lib": "1.17.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.0"
+  }
+}
