@@ -154,7 +154,7 @@ async function reload(){
     if(hadSession&&state.session){
       state.adminEvents=adminEvents.events;state.rules=rules.recurrences;
     }
-    renderFilters();renderCalendar();renderAdmin();report('活動已更新。'+(state.holidays&&!state.holidays.years.includes(state.month.slice(0,4))?'此年份的香港公眾假期尚未公布／收錄。':''));
+    renderFilters();renderCalendar();renderAdmin();report('已更新。'+(state.holidays&&!state.holidays.years.includes(state.month.slice(0,4))?'此年份的香港公眾假期尚未公布／收錄。':''));
   }catch(e){if(sequence===state.loading){if(hadSession&&!state.session){await reload();report('登入已失效，仍可查看公開月曆。',true);return;}state.events=[];renderCalendar();report(e.message,true);}}
   finally{if(sequence===state.loading)$('refresh').disabled=false;}
 }
