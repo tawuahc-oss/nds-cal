@@ -1,17 +1,24 @@
 <!doctype html>
 <html lang="zh-Hant"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://nds-cal.tawuahc.workers.dev; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" type="image/png" href="./assets/icons/calendar-192.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./assets/icons/calendar-180.png">
+<meta name="theme-color" content="#87684a">
 <title>北區學生月程</title><link rel="stylesheet" href="./assets/calendar.css">
 <script src="./assets/vendor/lunar.js" defer></script><script src="./assets/app.js" type="module"></script>
 </head><body><main class="app">
 <header class="top"><div><div class="brand">THE CHURCH OF GOD IN HONG KONG</div><h1>北區學生月程</h1></div>
-<div class="top-actions"><button id="theme" aria-label="切換夜間模式">日／夜</button><button id="refresh">重新整理</button><button id="loginOpen">管理員登入</button><button id="logout" hidden>登出</button></div></header>
-<div class="monthbar"><h2 class="month-title" id="monthTitle"></h2><nav class="nav" aria-label="月份導覽"><button id="prev" aria-label="上一個月">‹</button><button id="today" class="todaybtn">今天</button><button id="next" aria-label="下一個月">›</button></nav></div>
+<div class="top-actions">
+<button class="icon-action" id="refresh" type="button" aria-label="重新整理" title="重新整理"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5 M4 17v-5h5 M5.6 9a7 7 0 0 1 11.6-2L20 12 M4 12l2.8 5a7 7 0 0 0 11.6-2"/></svg></button>
+<button class="icon-action" id="theme" type="button" aria-label="切換日間／夜間模式" title="切換日間／夜間模式"><svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2 M12 20v2 M4.93 4.93l1.42 1.42 M17.65 17.65l1.42 1.42 M2 12h2 M20 12h2 M4.93 19.07l1.42-1.42 M17.65 6.35l1.42-1.42"/></svg><svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10Z"/></svg></button>
+<a class="icon-action" href="https://tawuahc-oss.github.io/north-district-weekly/" aria-label="北區週報" title="北區週報"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11 M9 12h11 M9 18h11 M4 6h.01 M4 12h.01 M4 18h.01"/></svg></a>
+<button class="icon-action" id="loginOpen" type="button" aria-label="管理員登入" title="管理員登入"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="5"/><path d="m11.5 11.5 8-8 2 2-2 2 1.5 1.5-2.5 2.5L17 10.5l-2 2"/></svg></button><button class="icon-action" id="logout" type="button" hidden aria-label="登出" title="登出"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></svg></button></div><h2 class="month-title" id="monthTitle"></h2>
+<div class="monthbar"><p id="status" class="message" role="status" aria-live="polite">正在讀取月曆…</p><nav class="nav" aria-label="月份導覽"><button id="prev" aria-label="上一個月">‹</button><button id="today" class="todaybtn">今天</button><button id="next" aria-label="下一個月">›</button></nav></div></header>
 <div id="filters" class="calendar-checks" aria-label="活動分類篩選"></div>
-<p id="status" class="message" role="status" aria-live="polite">正在讀取月曆…</p>
-<section class="cal-shell" aria-label="月曆"><div class="weekdays"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div><div id="days" class="days"></div></section>
-<section class="day-events"><div class="events-head"><div><h2 id="dayTitle">當日活動</h2><div class="events-date" id="dayDate"></div></div><button class="primary" id="addEvent" hidden>新增活動</button></div><div id="dayList" class="day-event-list"></div></section>
+<section class="cal-shell" aria-label="月曆"><div class="weekdays"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div><div id="days" class="days"></div><div id="categoryLegend" class="category-legend" aria-label="分類圖例"></div></section>
+<section class="day-events"><div class="events-head"><div><h2 id="dayTitle">當日活動</h2><div class="events-date" id="dayDate"></div></div><button class="primary" id="addEvent" hidden>新增活動</button></div><div id="portraitFilters"></div><div id="dayList" class="day-event-list"></div></section>
 <section id="adminPanel" class="admin-panel" hidden><div class="section-head"><h2>管理員後台</h2><span id="adminName"></span></div>
 <p>所有活動及重複規則均可在同一張表格儲存。修改會立即更新月曆。</p><div class="actions"><button id="newEvent" class="primary">新增活動</button><button id="manageCategories">管理分類</button><button id="accountOpen">帳戶安全</button><button id="exportJson">下載完整活動 JSON</button><button id="exportPdf">匯出 A4 PDF</button><button id="archiveOpen">年度封存／兩年保留</button></div><h3>活動與重複系列</h3><div id="adminEvents"></div></section>
 <p class="notice">時區：香港（UTC+8）。農曆及節氣按日期計算。教會活動由獲授權管理員管理。</p>
@@ -37,7 +44,32 @@
 </fieldset><p id="eventError" class="form-error" role="alert"></p><div class="actions"><button id="saveEvent" type="submit" class="primary">儲存活動</button><button type="button" data-close="eventDialog">取消</button></div></form></dialog>
 <dialog id="detailDialog" aria-labelledby="detailTitle"><h2 id="detailTitle">活動詳情</h2><div id="detailBody"></div><div id="detailActions" class="actions"></div><button data-close="detailDialog">關閉</button></dialog>
 <dialog id="categoriesDialog" aria-labelledby="categoryTitle"><h2 id="categoryTitle">分類管理</h2><form id="categoryForm"><label>分類名稱<input name="name" required maxlength="80"></label>
-<div class="form-grid"><label>分類顏色<input name="color" type="color" value="#87684a"></label><label>排序<input name="sort_order" type="number" min="-10000" max="10000" value="0"></label></div>
+<div class="form-grid"><fieldset><legend>分類顏色</legend><div class="category-palette">
+  <label title="玫瑰"><input type="radio" name="color" value="#c05476" aria-label="玫瑰" required checked><span style="background:#c05476"></span></label>
+  <label title="橙紅"><input type="radio" name="color" value="#e3683e" aria-label="橙紅" required><span style="background:#e3683e"></span></label>
+  <label title="金黃"><input type="radio" name="color" value="#d8be5e" aria-label="金黃" required><span style="background:#d8be5e"></span></label>
+  <label title="深綠"><input type="radio" name="color" value="#489160" aria-label="深綠" required><span style="background:#489160"></span></label>
+  <label title="靛藍"><input type="radio" name="color" value="#6e72c3" aria-label="靛藍" required><span style="background:#6e72c3"></span></label>
+  <label title="紫"><input type="radio" name="color" value="#a75aba" aria-label="紫" required><span style="background:#a75aba"></span></label>
+  <label title="亮粉"><input type="radio" name="color" value="#d85675" aria-label="亮粉" required><span style="background:#d85675"></span></label>
+  <label title="橙"><input type="radio" name="color" value="#dd7835" aria-label="橙" required><span style="background:#dd7835"></span></label>
+  <label title="黃綠"><input type="radio" name="color" value="#bcc256" aria-label="黃綠" required><span style="background:#bcc256"></span></label>
+  <label title="青綠"><input type="radio" name="color" value="#429a8e" aria-label="青綠" required><span style="background:#429a8e"></span></label>
+  <label title="灰藍"><input type="radio" name="color" value="#828bc2" aria-label="灰藍" required><span style="background:#828bc2"></span></label>
+  <label title="棕"><input type="radio" name="color" value="#957367" aria-label="棕" required><span style="background:#957367"></span></label>
+  <label title="紅橙"><input type="radio" name="color" value="#da5234" aria-label="紅橙" required><span style="background:#da5234"></span></label>
+  <label title="琥珀"><input type="radio" name="color" value="#e0963c" aria-label="琥珀" required><span style="background:#e0963c"></span></label>
+  <label title="草綠"><input type="radio" name="color" value="#85ad59" aria-label="草綠" required><span style="background:#85ad59"></span></label>
+  <label title="天藍"><input type="radio" name="color" value="#4b99d2" aria-label="天藍" required><span style="background:#4b99d2"></span></label>
+  <label title="淡紫"><input type="radio" name="color" value="#ae9cce" aria-label="淡紫" required><span style="background:#ae9cce"></span></label>
+  <label title="灰"><input type="radio" name="color" value="#7c7c7c" aria-label="灰" required><span style="background:#7c7c7c"></span></label>
+  <label title="珊瑚粉"><input type="radio" name="color" value="#d6837a" aria-label="珊瑚粉" required><span style="background:#d6837a"></span></label>
+  <label title="淺金"><input type="radio" name="color" value="#e7ba51" aria-label="淺金" required><span style="background:#e7ba51"></span></label>
+  <label title="翠綠"><input type="radio" name="color" value="#55b080" aria-label="翠綠" required><span style="background:#55b080"></span></label>
+  <label title="矢車菊藍"><input type="radio" name="color" value="#668be1" aria-label="矢車菊藍" required><span style="background:#668be1"></span></label>
+  <label title="藕紫"><input type="radio" name="color" value="#a479b1" aria-label="藕紫" required><span style="background:#a479b1"></span></label>
+  <label title="灰棕"><input type="radio" name="color" value="#a5998c" aria-label="灰棕" required><span style="background:#a5998c"></span></label>
+</div></fieldset><label>排序<input name="sort_order" type="number" min="-10000" max="10000" value="0"></label></div>
 <div class="actions"><button type="submit" class="primary">儲存分類</button><button type="button" id="resetCategory">新增另一分類</button></div></form><p id="categoryError" class="form-error" role="alert"></p><div id="categoryList"></div><button data-close="categoriesDialog">關閉</button></dialog>
 <dialog id="pdfDialog" aria-labelledby="pdfTitle"><form id="pdfForm"><h2 id="pdfTitle">匯出 A4 PDF</h2>
 <label>內容<select name="kind"><option value="calendar">月曆式 PDF（橫向 A4）</option><option value="details">詳細活動紀錄 PDF（直向 A4）</option></select></label>

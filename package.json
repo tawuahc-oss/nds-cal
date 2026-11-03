@@ -2,10 +2,10 @@
   "name": "nds-cal",
   "private": true,
   "scripts": {
-    "start": "node scripts/preview.mjs",
+    "start": "node server.mjs",
     "test": "node --test",
     "check:live": "node cloudflare/verify-cors.mjs",
-    "build": "node scripts/build-assets.mjs && node scripts/build-site.mjs",
+    "build": "node --check assets/app.js && node scripts/build-assets.mjs && node scripts/build-site.mjs",
     "preview": "node scripts/preview.mjs",
     "update:holidays": "node scripts/update-holidays.mjs",
     "worker:check": "wrangler deploy --dry-run"

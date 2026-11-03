@@ -1,8 +1,8 @@
 import {lunarInfo} from './lunar-info.js';
 import {ruleFromForm,ruleDescription,weekdayCodes,weekdays} from './recurrence-form.js';
 const $=id=>document.getElementById(id);
-const preview=['127.0.0.1','localhost'].includes(location.hostname);
-const API=location.hostname==='tawuahc-oss.github.io'?'https://nds-cal.tawuahc.workers.dev':location.origin;
+const preview=['127.0.0.1','localhost'].includes(location.hostname)&&location.port==='8081';
+const API=(!preview&&['127.0.0.1','localhost','tawuahc-oss.github.io'].includes(location.hostname))?'https://nds-cal.tawuahc.workers.dev':location.origin;
 const storageKey=preview?'nds-preview-session':'nds-admin-session';
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Hong_Kong',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const state={month:today.slice(0,7),selected:today,events:[],categories:[],adminEvents:[],rules:[],
@@ -45,6 +45,35 @@ function range(){
 function visible(e){return state.filters.get(e.category_id||'')!==false;}
 function eventsOn(day){return state.events.filter(e=>visible(e)&&e.start_at.slice(0,10)<=day&&(e.end_at||e.start_at).slice(0,10)>=day);}
 function time(e){return e.all_day?'全日':e.start_at.slice(11,16);}
+const detailDateFormat=new Intl.DateTimeFormat('zh-HK',{
+  timeZone:'Asia/Hong_Kong',year:'numeric',month:'long',day:'numeric'
+});
+const detailTimeFormat=new Intl.DateTimeFormat('zh-HK',{
+  timeZone:'Asia/Hong_Kong',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+});
+function detailDateTime(value,allDay){
+  if(!value)return value;
+  const localValue=value.replace(' ','T');
+  const date=new Date(localValue.length===10?localValue+'T00:00:00+08:00':
+    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(localValue)?localValue:localValue+'+08:00');
+  if(Number.isNaN(date.getTime()))return value;
+  const day=detailDateFormat.format(date);
+  return allDay?day+'（全日）':day+' '+detailTimeFormat.format(date);
+}
+const detailDialog=$('detailDialog');
+function isOutsideDetail(event){
+  const {left,right,top,bottom}=detailDialog.getBoundingClientRect();
+  return event.target===detailDialog&&
+    (event.clientX<left||event.clientX>right||event.clientY<top||event.clientY>bottom);
+}
+let detailPressOutside=false;
+detailDialog.addEventListener('pointerdown',event=>{
+  detailPressOutside=isOutsideDetail(event);
+});
+detailDialog.addEventListener('click',event=>{
+  if(detailPressOutside&&isOutsideDetail(event))detailDialog.close();
+  detailPressOutside=false;
+});
 function color(e){return /^#[\da-f]{6}$/i.test(e.category_color||'')?e.category_color:'#87684a';}
 function renderAuth(){
   const logged=!!state.session;
@@ -54,12 +83,13 @@ function renderAuth(){
   if(!logged){state.adminEvents=[];state.rules=[];$('adminEvents').replaceChildren();}
 }
 function renderFilters(){
-  const root=$('filters');root.replaceChildren();
-  for(const category of [{id:'',name:'未分類',color:'#87684a'},...state.categories,{id:'holidays',name:'香港公眾假期',color:'#a74732'}]){
+  const root=$('filters'),legend=$('categoryLegend');root.replaceChildren();legend.replaceChildren();
+  for(const category of [...state.categories,{id:'holidays',name:'香港公眾假期',color:'#a74732'}]){
     const label=node('label'),input=node('input');input.type='checkbox';input.checked=state.filters.get(category.id)!==false;
     input.onchange=()=>{state.filters.set(category.id,input.checked);renderCalendar();};
     const swatch=node('span',undefined,'swatch');swatch.style.setProperty('--event-color',category.color);
     label.append(input,swatch,document.createTextNode(category.name));root.append(label);
+    const key=node('span'),dot=swatch.cloneNode();key.append(dot,document.createTextNode(category.name));legend.append(key);
   }
 }
 function renderCalendar(){
@@ -73,19 +103,30 @@ function renderCalendar(){
     date.setAttribute('aria-label',day+'，查看當日活動');
     const lunar=lunarInfo(day),info=node('span',[lunar.date,lunar.term,...lunar.festivals].filter(Boolean).join(' '),'lunar-info');
     header.append(date,info);cell.append(header);
-    if(state.filters.get('holidays')!==false)for(const h of state.holidays?.events.filter(h=>h.date===day)||[])cell.append(node('span','假期 · '+h.title,'holiday-label'));
+    if(state.filters.get('holidays')!==false)for(const h of state.holidays?.events.filter(h=>h.date===day)||[])cell.append(node('span',h.title==='公眾假期'?h.title:'假期 · '+h.title,'holiday-label'));
+    const eventMarkers=node('div',undefined,'event-markers');
+    const timedMarkers=node('div',undefined,'timed-markers');
     for(const e of eventsOn(day)){
-      const b=button(time(e)+' '+e.title,()=>showDetails(e),'calendar-event'+(e.all_day?' all-day':''));
-      b.style.setProperty('--event-color',color(e));cell.append(b);
+      const b=button(e.all_day?e.title:time(e)+' '+e.title,()=>showDetails(e),'calendar-event'+(e.all_day?' all-day':''));
+      b.style.setProperty('--event-color',color(e));b.setAttribute('aria-label',time(e)+' '+e.title);
+      if(e.all_day)eventMarkers.append(b);
+      else timedMarkers.append(b);
     }
+    if(timedMarkers.childElementCount)eventMarkers.append(timedMarkers);
+    if(eventMarkers.childElementCount)cell.append(eventMarkers);
     root.append(cell);
   }
-  $('dayDate').textContent=state.selected+'（香港時間）';const list=$('dayList');list.replaceChildren();
+  $('dayDate').textContent=new Intl.DateTimeFormat('zh-HK',{dateStyle:'full',timeZone:'Asia/Hong_Kong'}).format(new Date(state.selected+'T00:00:00+08:00'))+' · 農曆'+lunarInfo(state.selected).date;
+  const list=$('dayList');list.replaceChildren();
   for(const e of eventsOn(state.selected)){
-    const row=node('div',undefined,'day-item');row.append(button(time(e)+'　'+e.title,()=>showDetails(e)),node('span',e.location||''));list.append(row);
+    const card=button('',()=>showDetails(e),'day-card');
+    card.style.setProperty('--event-color',color(e));
+    const hours=!e.all_day&&e.end_at?time(e)+' – '+e.end_at.slice(11,16):time(e);
+    card.append(node('strong',e.title),node('small',[hours,e.category_name,e.location].filter(Boolean).join(' · ')));
+    list.append(card);
   }
   if(!list.children.length)list.append(node('p','當日沒有符合篩選條件的活動。','hint'));
-  if(state.filters.get('holidays')!==false)for(const h of state.holidays?.events.filter(h=>h.date===state.selected)||[])list.append(node('p','香港公眾假期：'+h.title,'holiday-label'));
+  if(state.filters.get('holidays')!==false)for(const h of state.holidays?.events.filter(h=>h.date===state.selected)||[])list.append(node('p',h.title==='公眾假期'?h.title:'香港公眾假期：'+h.title,'holiday-label'));
 }
 function renderAdmin(){
   const root=$('adminEvents');root.replaceChildren();
@@ -102,12 +143,16 @@ async function reload(){
   const sequence=++state.loading,hadSession=!!state.session;report('正在讀取活動…');$('refresh').disabled=true;
   try{
     const {from,to}=range();
-    const [categories,events]=await Promise.all([api('/api/categories'),api((state.session?'/api/admin/calendar':'/api/events')+'?from='+from+'&to='+to)]);
+    const [categories,events,adminEvents,rules]=await Promise.all([
+      api('/api/categories'),
+      api((hadSession?'/api/admin/calendar':'/api/calendar')+'?from='+from+'&to='+to),
+      hadSession?allAdminRows('events'):null,
+      hadSession?allAdminRows('recurrences'):null
+    ]);
     if(sequence!==state.loading)return;
     state.categories=categories.categories;state.events=events.events;
-    if(state.session){
-      const [events,rules]=await Promise.all([allAdminRows('events'),allAdminRows('recurrences')]);
-      if(sequence!==state.loading)return;state.adminEvents=events.events;state.rules=rules.recurrences;
+    if(hadSession&&state.session){
+      state.adminEvents=adminEvents.events;state.rules=rules.recurrences;
     }
     renderFilters();renderCalendar();renderAdmin();report('活動已更新。'+(state.holidays&&!state.holidays.years.includes(state.month.slice(0,4))?'此年份的香港公眾假期尚未公布／收錄。':''));
   }catch(e){if(sequence===state.loading){if(hadSession&&!state.session){await reload();report('登入已失效，仍可查看公開月曆。',true);return;}state.events=[];renderCalendar();report(e.message,true);}}
@@ -165,7 +210,7 @@ async function mutate(action){
 }
 function showDetails(e){
   $('detailTitle').textContent=e.title;const body=$('detailBody');body.replaceChildren();
-  const fields=[['開始',e.start_at],['結束',e.end_at],['地點',e.location],['分類',e.category_name],['描述',e.description],['備註',e.notes]];
+  const fields=[['開始',detailDateTime(e.start_at,e.all_day)],['結束',detailDateTime(e.end_at,e.all_day)],['地點',e.location],['分類',e.category_name],['描述',e.description],['備註',e.notes]];
   const dl=node('dl');for(const [label,value] of fields)if(value)dl.append(node('dt',label),node('dd',value));body.append(dl);
   const actions=$('detailActions');actions.replaceChildren();
   if(state.session){
@@ -207,12 +252,28 @@ async function deleteEvent(e,r){
   try{await mutate(async()=>{await api(r?'/api/admin/recurrences/'+r.id:'/api/admin/events/'+e.id,'DELETE');$('detailDialog').close();});}
   catch(error){report(error.message,true);}
 }
+async function moveCategory(id,target){
+  const ids=state.categories.map(category=>category.id),from=ids.indexOf(id);
+  if(state.mutating||from<0||target<0||target>=ids.length||from===target)return;
+  ids.splice(from,1);ids.splice(target,0,id);
+  $('categoryError').textContent='';
+  try{await mutate(()=>api('/api/admin/categories/order','PUT',{ids}));renderCategories();}
+  catch(e){$('categoryError').textContent=e.message;}
+}
 function renderCategories(){
   $('categoryList').replaceChildren();
-  for(const c of state.categories){
+  for(const [index,c] of state.categories.entries()){
     const row=node('div',undefined,'admin-row');row.append(node('span',c.name+'　'+c.color));
-    const actions=node('div',undefined,'actions');actions.append(button('編輯',()=>{state.categoryId=c.id;for(const key of ['name','color','sort_order'])$('categoryForm').elements[key].value=c[key];}),
+    const actions=node('div',undefined,'actions');actions.append(button('編輯',()=>{state.categoryId=c.id;for(const key of ['name','sort_order'])$('categoryForm').elements[key].value=c[key];for(const option of $('categoryForm').elements.color)option.checked=option.value===String(c.color).toLowerCase();}),
       button('刪除',async()=>{if(!confirm('確定刪除分類「'+c.name+'」？'))return;try{await mutate(()=>api('/api/admin/categories/'+c.id,'DELETE'));renderCategories();}catch(e){$('categoryError').textContent=e.message;}},'danger'));
+    const handle=node('span','⠿','category-drag');handle.draggable=true;handle.title='拖曳調整順序';
+    handle.ondragstart=event=>event.dataTransfer.setData('text/plain',c.id);
+    row.ondragover=event=>event.preventDefault();
+    row.ondrop=event=>{event.preventDefault();moveCategory(event.dataTransfer.getData('text/plain'),index);};
+    const up=button('↑',()=>moveCategory(c.id,index-1)),down=button('↓',()=>moveCategory(c.id,index+1));
+    up.setAttribute('aria-label',c.name+'上移');down.setAttribute('aria-label',c.name+'下移');
+    up.disabled=index===0;down.disabled=index===state.categories.length-1;
+    actions.prepend(handle,up,down);
     row.append(actions);$('categoryList').append(row);
   }
 }
@@ -259,7 +320,7 @@ $('loginForm').onsubmit=async event=>{
   event.preventDefault();const form=$('loginForm'),submit=form.querySelector('button[type=submit]');submit.disabled=true;$('loginError').textContent='';
   const username=form.elements.username.value,password=form.elements.password.value;form.elements.password.value='';
   try{const login=await api('/api/admin/login','POST',{username,password});saveSession({...login,username});
-    await api('/api/admin/me');$('loginDialog').close();await reload();
+    $('loginDialog').close();await reload();
   }catch(error){saveSession(null);$('loginError').textContent=error.message;}finally{submit.disabled=false;}
 };
 $('logout').onclick=async()=>{
@@ -314,7 +375,7 @@ $('pdfForm').onsubmit=async event=>{
     const unique=new Map();
     for(let cursor=from;cursor<=to;){
       const end=new Date(Math.min(Date.parse(cursor)+30*86400000,Date.parse(to))).toISOString().slice(0,10);
-      for(const item of (await api('/api/events?from='+cursor+'&to='+end)).events)unique.set(item.id,item);
+      for(const item of (await api('/api/calendar?from='+cursor+'&to='+end)).events)unique.set(item.id,item);
       cursor=new Date(Date.parse(end)+86400000).toISOString().slice(0,10);
     }
     const events=[...unique.values()].sort((a,b)=>a.start_at.localeCompare(b.start_at)),args={from,to,events,backup,fontBytes,Solar:globalThis.Solar,holidays:state.holidays?.events||[]};
@@ -339,12 +400,6 @@ $('archivePreview').onclick=async()=>{
     for(const e of data.candidates)$('archiveCandidates').append(node('p',e.start_at+'　'+e.title));
   }catch(e){$('archiveError').textContent=e.message;}
 };
-  if(!archivePreviewBefore||state.mutating)return;
-  const phrase='DELETE BEFORE '+archivePreviewBefore;
-  const value=prompt('請先開啟並確認年度 PDF 及 JSON 已保存。清理會永久刪除預覽內的舊活動。確認後輸入：'+phrase);
-  if(value!==phrase)return;
-  try{const result=await api('/api/admin/archive-cleanup','POST',{before:archivePreviewBefore,backup_confirmed:true,confirm:value});
-};
 for(const id of ['newEvent','addEvent'])$(id).onclick=()=>openEditor();
 for(const [id,delta] of [['prev',-1],['next',1]])$(id).onclick=()=>{
   const [y,m]=state.month.split('-').map(Number);state.month=new Date(Date.UTC(y,m-1+delta,1)).toISOString().slice(0,7);state.selected=state.month+'-01';reload();
@@ -354,8 +409,19 @@ $('refresh').onclick=reload;
 try{document.body.dataset.theme=localStorage.getItem('nds-theme')||'day';}catch{}
 $('theme').onclick=()=>{document.body.dataset.theme=document.body.dataset.theme==='night'?'day':'night';try{localStorage.setItem('nds-theme',document.body.dataset.theme);}catch{}};
 try{const saved=JSON.parse(sessionStorage.getItem(storageKey));if(saved?.token&&Date.parse(saved.expires_at)>Date.now())state.session=saved;}catch{}
+const portraitLayout=matchMedia('(orientation: portrait)');
+function placeFilters(){
+  const filters=$('filters');
+  if(portraitLayout.matches)$('portraitFilters').append(filters);
+  else document.querySelector('.cal-shell').before(filters);
+}
+portraitLayout.addEventListener('change',placeFilters);
+placeFilters();
 renderAuth();renderCalendar();
 fetch('./assets/data/hk-holidays.json').then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{
+  for(const holiday of data.events){
+    if(/^佛誕(?:翌日)?$/.test(holiday.title))holiday.title='公眾假期';
+  }
   state.holidays=data;renderCalendar();
 }).catch(()=>report('香港公眾假期資料暫時無法讀取；教會活動仍可使用。',true));
 reload();

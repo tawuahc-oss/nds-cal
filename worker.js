@@ -74,7 +74,7 @@ export default {
       }
 
       // Public: read events. Optional inclusive from/to expands recurring occurrences.
-      if ((path === "/api/events" || path === "/api/admin/calendar") && method === "GET") {
+      if ((path === "/api/events" || path === "/api/calendar" || path === "/api/admin/calendar") && method === "GET") {
         const admin = path === "/api/admin/calendar";
         if (admin && !await getSession(request, env)) return json({ error: "Unauthorized" }, 401);
         if (url.searchParams.has("from") || url.searchParams.has("to")) {
@@ -246,6 +246,22 @@ export default {
             ORDER BY sort_order ASC, name ASC
           `).all();
           return json({ categories: result.results });
+        }
+
+        if (path === "/api/admin/categories/order" && method === "PUT") {
+          const ids = (await readBody(request))?.ids;
+          if (!Array.isArray(ids) || ids.length > 1000 ||
+              ids.some(id => typeof id !== "string") || new Set(ids).size !== ids.length) {
+            return json({ error: "Invalid category order" }, 400);
+          }
+          const result = await env.DB.prepare(`
+            WITH requested AS (SELECT key, value FROM json_each(?))
+            UPDATE categories SET sort_order = (SELECT key FROM requested WHERE value = categories.id)
+            WHERE (SELECT COUNT(*) FROM categories) = (SELECT COUNT(*) FROM requested)
+              AND NOT EXISTS (SELECT 1 FROM requested WHERE value NOT IN (SELECT id FROM categories))
+          `).bind(JSON.stringify(ids)).run();
+          if (result.meta.changes !== ids.length) return json({ error: "分類清單已變更，請重新整理後再試。" }, 409);
+          return json({ success: true });
         }
 
         // Administrator: create category.
