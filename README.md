@@ -2,8 +2,8 @@
 
 教會月曆、同一介面的活動／分類／重複規則管理，以及年度 PDF 封存。
 
-- 正式前端：https://tawuahc-oss.github.io/nds-cal/
-- API：https://nds-cal.tawuahc.workers.dev/
+- 正式月曆：https://nds-cal.tawuahc.workers.dev/
+- API 健康檢查：https://nds-cal.tawuahc.workers.dev/api/health
 - 資料庫：Cloudflare D1 nds-cal，binding DB；此 Worker 不使用 Supabase。
 - 時區：Asia/Hong_Kong。
 - 原 church-calendar 網站不會由此專案部署或修改。
@@ -17,8 +17,7 @@
     npm run build
     npm start
 
-本機正式模式 http://127.0.0.1:8080 會讀寫雲端資料。
-隔離測試請執行 npm run preview，開啟 http://127.0.0.1:8081/?preview=1。
+npm start 與 npm run preview 均使用隔離測試資料。開啟 http://127.0.0.1:8081/。
 
 ## 說明
 

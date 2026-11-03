@@ -63,21 +63,20 @@ export async function detailsPdf({from,to,events,backup,fontBytes}){
   newPage();
   paragraph('本文件供閱讀；資料還原請使用 JSON 或 SQL 備份。');
   const rules=backup?.tables?.recurrence_rules||[],exceptions=backup?.tables?.event_exceptions||[];
-  const sourceEvents=backup?.tables?.events||[],included=new Set();
+  const sourceEvents=backup?.tables?.events||[];
   for(const event of events){
     paragraph(event.title,13);
-    for(const [label,key] of [['開始','start_at'],['結束','end_at'],['地點','location'],['分類','category_name'],['描述','description'],['備註','notes']])
+    for(const [label,key] of [['開始','start_at'],['結束','end_at'],['地點','location'],['分類','category_name'],['描述','description']])
       paragraph(label+'：'+(event[key]||'未填寫'));
     const rule=rules.find(r=>r.id===event.recurrence_rule_id);
     paragraph('重複：'+ruleDescription(rule,event.start_at));
-    if(rule)included.add(rule.id);
     paragraph('單次狀態：'+(event.exception_action==='modified'?'已修改':'原定安排')+
       (event.original_start_at?'；原定開始：'+event.original_start_at:''));
   }
   // Include cancellations too: they intentionally do not appear in the public occurrence API.
   const records=exceptions.filter(x=>{
     let override={};try{override=JSON.parse(x.override_json||'{}');}catch{}
-    return included.has(x.recurrence_rule_id)||(x.original_start_at.slice(0,10)>=from&&x.original_start_at.slice(0,10)<=to)||
+    return (x.original_start_at.slice(0,10)>=from&&x.original_start_at.slice(0,10)<=to)||
       (override.start_at?.slice(0,10)>=from&&override.start_at.slice(0,10)<=to);
   });
   if(records.length){
@@ -85,7 +84,12 @@ export async function detailsPdf({from,to,events,backup,fontBytes}){
     for(const exception of records){
       const rule=rules.find(r=>r.id===exception.recurrence_rule_id),event=sourceEvents.find(e=>e.id===rule?.event_id);
       paragraph((event?.title||'系列')+'｜原定 '+exception.original_start_at+'｜'+(exception.action==='cancelled'?'已取消':'已修改'));
-      if(exception.override_json)paragraph('修改內容：'+exception.override_json);
+      if(exception.override_json){
+        const override=JSON.parse(exception.override_json);
+        const fields=['title','start_at','end_at','all_day','location','description','category_id'];
+        const publicChanges=Object.fromEntries(fields.filter(key=>Object.hasOwn(override,key)).map(key=>[key,override[key]]));
+        if(Object.keys(publicChanges).length)paragraph('修改內容：'+JSON.stringify(publicChanges));
+      }
     }
   }
   if(!events.length&&!records.length)paragraph('此期間沒有活動或單次例外紀錄。');

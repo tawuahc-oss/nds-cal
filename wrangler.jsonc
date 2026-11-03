@@ -1,6 +1,7 @@
 {
   "name": "nds-cal",
   "main": "worker.js",
+  "assets": { "directory": "./dist" },
   "compatibility_date": "2026-10-30",
   "d1_databases": [
     {

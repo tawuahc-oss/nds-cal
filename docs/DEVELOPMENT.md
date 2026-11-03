@@ -23,7 +23,7 @@
 
     npm start
 
-http://127.0.0.1:8080 的正式模式會讀寫同一個雲端 D1，請小心使用。
+npm start 與 npm run preview 均啟動隔離測試。
 
     npm run preview
 
@@ -43,7 +43,7 @@ http://127.0.0.1:8081/?preview=1 是獨立的記憶體資料庫測試環境。
        npx wrangler deploy
        npm run check:live
 
-5. 把 dist 的內容發佈到 nds-cal 的 GitHub Pages。
+5. Worker 會同時發布 dist 網頁及 API。開啟 https://nds-cal.tawuahc.workers.dev/。
    dist 僅包含公開頁面與明確允許的資產，不包含開發測試頁、Worker、
    備份、node_modules 或機密設定。
 6. 在正式頁用自己的帳密測試：登入、普通活動、重複系列、單次例外、登出、

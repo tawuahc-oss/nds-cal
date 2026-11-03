@@ -2,7 +2,7 @@
   "name": "nds-cal",
   "private": true,
   "scripts": {
-    "start": "node server.mjs",
+    "start": "node scripts/preview.mjs",
     "test": "node --test",
     "check:live": "node cloudflare/verify-cors.mjs",
     "build": "node scripts/build-assets.mjs && node scripts/build-site.mjs",

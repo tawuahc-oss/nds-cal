@@ -1,8 +1,8 @@
 import {lunarInfo} from './lunar-info.js';
 import {ruleFromForm,ruleDescription,weekdayCodes,weekdays} from './recurrence-form.js';
 const $=id=>document.getElementById(id);
-const preview=['127.0.0.1','localhost'].includes(location.hostname)&&new URLSearchParams(location.search).get('preview')==='1';
-const API=preview?location.origin:'https://nds-cal.tawuahc.workers.dev';
+const preview=['127.0.0.1','localhost'].includes(location.hostname);
+const API=location.hostname==='tawuahc-oss.github.io'?'https://nds-cal.tawuahc.workers.dev':location.origin;
 const storageKey=preview?'nds-preview-session':'nds-admin-session';
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Hong_Kong',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const state={month:today.slice(0,7),selected:today,events:[],categories:[],adminEvents:[],rules:[],
@@ -21,10 +21,10 @@ const errorText=message=>{
     'Current password is incorrect':'目前密碼不正確。','Invalid recovery code':'復原碼不正確或已使用。',
     'Choose a different password':'新密碼必須與目前密碼不同。',
     'Keep the current and previous calendar year online':'請至少保留今年及去年的資料；清理日期不能設定得更近期。',
-    'Confirm downloaded PDF and JSON backups before cleanup':'請先確認 PDF 和 JSON 已下載並保存，再清理舊資料。',
+    'Too many occurrences in date range':'活動太多，無法完整顯示或匯出。請縮短日期範圍。',
     'Internal server error':'伺服器暫時無法完成操作，請稍後再試或聯絡管理員。',
     'Category name already exists':'已有相同名稱的分類。',
-    'Use 8-128 characters and avoid common passwords; 12 or more is recommended':'請使用 8–128 字元並避開常見密碼，建議 12 字元以上。'};
+    'Use 6-128 characters and avoid common passwords; 12 or more is recommended':'請使用 6–128 字元並避開常見密碼，建議 12 字元以上。'};
   return map[message]||message;
 };
 async function api(path,method='GET',body) {
@@ -102,7 +102,7 @@ async function reload(){
   const sequence=++state.loading,hadSession=!!state.session;report('正在讀取活動…');$('refresh').disabled=true;
   try{
     const {from,to}=range();
-    const [categories,events]=await Promise.all([api('/api/categories'),api('/api/events?from='+from+'&to='+to)]);
+    const [categories,events]=await Promise.all([api('/api/categories'),api((state.session?'/api/admin/calendar':'/api/events')+'?from='+from+'&to='+to)]);
     if(sequence!==state.loading)return;
     state.categories=categories.categories;state.events=events.events;
     if(state.session){
@@ -322,10 +322,8 @@ $('pdfForm').onsubmit=async event=>{
     download('nds-cal-'+kind+'-'+from+'-'+to+'.pdf',bytes,'application/pdf');$('pdfDialog').close();report('PDF 已產生。');
   }catch(e){$('pdfError').textContent=e.message;}finally{submit.disabled=false;}
 };
-let archivePreviewBefore=null;
 $('archiveOpen').onclick=()=>{
   const year=Number(today.slice(0,4));$('archiveYear').value=year-2;$('archiveBefore').value=(year-1)+'-01-01';
-  $('archiveError').textContent='';$('archiveCandidates').replaceChildren();$('archiveDelete').hidden=true;archivePreviewBefore=null;$('archiveDialog').showModal();
 };
 for(const [id,kind] of [['archiveCalendar','calendar'],['archiveDetails','details']])$(id).onclick=()=>{
   const year=String($('archiveYear').value);
@@ -335,24 +333,17 @@ for(const [id,kind] of [['archiveCalendar','calendar'],['archiveDetails','detail
 };
 $('archiveJson').onclick=async()=>{try{download('nds-cal-archive-'+today+'.json',JSON.stringify(await api('/api/admin/export'),null,2));}catch(e){$('archiveError').textContent=e.message;}};
 $('archivePreview').onclick=async()=>{
-  $('archiveError').textContent='';$('archiveDelete').hidden=true;
   try{
     const before=$('archiveBefore').value,data=await api('/api/admin/archive-preview?before='+encodeURIComponent(before));
-    archivePreviewBefore=before;$('archiveCandidates').replaceChildren(node('p','可清理 '+data.candidates.length+' 個活動／已結束系列：'));
+    $('archiveCandidates').replaceChildren(node('p','可清理 '+data.candidates.length+' 個活動／已結束系列：'));
     for(const e of data.candidates)$('archiveCandidates').append(node('p',e.start_at+'　'+e.title));
-    $('archiveDelete').hidden=!data.candidates.length;
   }catch(e){$('archiveError').textContent=e.message;}
 };
-$('archiveBefore').onchange=()=>{$('archiveDelete').hidden=true;archivePreviewBefore=null;};
-$('archiveDelete').onclick=async()=>{
   if(!archivePreviewBefore||state.mutating)return;
   const phrase='DELETE BEFORE '+archivePreviewBefore;
   const value=prompt('請先開啟並確認年度 PDF 及 JSON 已保存。清理會永久刪除預覽內的舊活動。確認後輸入：'+phrase);
   if(value!==phrase)return;
-  $('archiveDelete').disabled=true;
   try{const result=await api('/api/admin/archive-cleanup','POST',{before:archivePreviewBefore,backup_confirmed:true,confirm:value});
-    $('archiveDelete').hidden=true;$('archiveCandidates').replaceChildren(node('p','已清理 '+result.deleted+' 個活動／系列。'));await reload();}
-  catch(e){$('archiveError').textContent=e.message;}finally{$('archiveDelete').disabled=false;}
 };
 for(const id of ['newEvent','addEvent'])$(id).onclick=()=>openEditor();
 for(const [id,delta] of [['prev',-1],['next',1]])$(id).onclick=()=>{

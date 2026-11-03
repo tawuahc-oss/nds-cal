@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {database,loadWorker} from './helpers.mjs';
 const {default:worker}=await loadWorker();
-test('cleanup requires explicit backup confirmation and preserves future, ongoing and exception-bearing series',async()=>{
+test('archive preview protects active series and the web API cannot perform cleanup',async()=>{
   const env=await database();
   const call=(path,body)=>worker.fetch(new Request('https://api.test'+path,{method:body?'POST':'GET',
     headers:{Authorization:'Bearer '+env.token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}),env);
@@ -20,10 +20,10 @@ test('cleanup requires explicit backup confirmation and preserves future, ongoin
       .run(JSON.stringify({start_at:'2030-01-01'}));
     const before='2025-01-01',preview=await (await call('/api/admin/archive-preview?before='+before)).json();
     assert.deepEqual(preview.candidates.map(e=>e.id).sort(),['ended','past']);
-    assert.equal((await call('/api/admin/archive-cleanup',{before})).status,400);
+    assert.equal((await call('/api/admin/archive-cleanup',{before})).status,404);
     const result=await call('/api/admin/archive-cleanup',{before,backup_confirmed:true,confirm:'DELETE BEFORE '+before});
-    assert.equal(result.status,200);assert.equal((await result.json()).deleted,2);
-    assert.deepEqual(env.sqlite.prepare('SELECT id FROM events ORDER BY id').all().map(e=>e.id),['cross','excepted','future','ongoing']);
+    assert.equal(result.status,404);
+    assert.deepEqual(env.sqlite.prepare('SELECT id FROM events ORDER BY id').all().map(e=>e.id),['cross','ended','excepted','future','ongoing','past']);
     assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM event_exceptions").get().n,1);
     assert.equal(env.sqlite.prepare("SELECT COUNT(*) n FROM admin_sessions").get().n,1);
   }finally{env.close();}

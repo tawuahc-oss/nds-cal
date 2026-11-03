@@ -71,3 +71,35 @@ test('all admin routes require auth; export excludes sessions and login attempts
     assert.ok(Array.isArray(exported.tables.audit_logs));
   }finally{env.close();}
 });
+
+test('public events exclude notes while authenticated calendar preserves occurrence notes',async()=>{
+  const env=await database();
+  try{
+    const created=await (await call(env,'/api/admin/calendar-events','POST',{
+      event:{...baseEvent,notes:'series notes'},rule:rule()
+    })).json();
+    const exception='/api/admin/recurrences/'+created.recurrence_rule_id+'/exceptions';
+    assert.equal((await call(env,exception,'POST',{
+      original_start_at:'2026-11-02',action:'modified',override:{notes:'occurrence notes'}
+    })).status,200);
+    const range='?from=2026-11-01&to=2026-11-30';
+    for(const suffix of ['',range]){
+      const {events}=await (await call(env,'/api/events'+suffix,'GET',null,false)).json();
+      assert.equal(events.length,1);
+      assert.equal(Object.hasOwn(events[0],'notes'),false);
+    }
+    assert.equal((await call(env,'/api/admin/calendar'+range,'GET',null,false)).status,401);
+    const {events}=await (await call(env,'/api/admin/calendar'+range)).json();
+    assert.equal(events[0].notes,'occurrence notes');
+  }finally{env.close();}
+});
+
+test('public date range fails explicitly when the database query would truncate events',async()=>{
+  const env=await database();
+  try{
+    env.sqlite.exec(`WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n<1001)
+      INSERT INTO events(id,title,start_at,all_day) SELECT 'event-'||n,'Activity','2026-11-02',1 FROM seq`);
+    const response=await call(env,'/api/events?from=2026-11-01&to=2026-11-30','GET',null,false);
+    assert.equal(response.status,413);
+  }finally{env.close();}
+});

@@ -1,12 +1,10 @@
 /**
- * nds-cal — Cloudflare Worker API v5
+ * nds-cal — Cloudflare Worker API v7
  * Public: health, categories, events
  * Admin: login, me, logout, category CRUD, event CRUD, recurrence CRUD, occurrence exceptions
  * D1 binding: DB
  * Secrets: ADMIN_USERNAME, ADMIN_PASSWORD_HASH
- *
- * This is a development-stage API. Do not enable public admin use yet:
- * rate limiting needs hardening, password rotation and a completed admin UI.
+
  */
 
 const WEBSITE_ORIGIN = "https://tawuahc-oss.github.io";
@@ -42,7 +40,7 @@ export default {
       return new Response(JSON.stringify(data, null, 2), { status, headers });
     }
 
-    if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    if (origin && origin !== url.origin && !ALLOWED_ORIGINS.has(origin)) {
       return json({ error: "Origin not allowed" }, 403);
     }
 
@@ -61,7 +59,7 @@ export default {
           project: "nds-cal",
           status: "online",
           database: test?.value === 1 ? "connected" : "error",
-          api_version: 6
+          api_version: 7
         });
       }
 
@@ -76,23 +74,26 @@ export default {
       }
 
       // Public: read events. Optional inclusive from/to expands recurring occurrences.
-      if (path === "/api/events" && method === "GET") {
+      if ((path === "/api/events" || path === "/api/admin/calendar") && method === "GET") {
+        const admin = path === "/api/admin/calendar";
+        if (admin && !await getSession(request, env)) return json({ error: "Unauthorized" }, 401);
         if (url.searchParams.has("from") || url.searchParams.has("to")) {
           const range = readRange(url);
           if (range.error) return json({ error: range.error }, 400);
           const items = await calendarOccurrences(env, range.from, range.to);
           await hydrateOccurrenceCategories(items, env);
-          return json({ events: items, from: range.from, to: range.to });
+          return json({ events: admin ? items : items.map(({ notes, ...event }) => event), from: range.from, to: range.to });
         }
         const result = await env.DB.prepare(`
           SELECT e.id, e.title, e.description, e.location,
                  e.start_at, e.end_at, e.all_day, e.category_id,
-                 e.notes, c.name AS category_name, c.color AS category_color
+                 c.name AS category_name, c.color AS category_color
           FROM events e
           LEFT JOIN categories c ON e.category_id = c.id
           ORDER BY e.start_at ASC
-          LIMIT 1000
+          LIMIT 1001
         `).all();
+        if (result.results.length > 1000) throw new Error("TOO_MANY_OCCURRENCES");
         return json({ events: result.results });
       }
 
@@ -118,8 +119,8 @@ export default {
 
         // Reserve attempts atomically, including concurrent requests.
         const reservation = await env.DB.prepare(
-          "INSERT INTO login_attempts(id,attempted_at) SELECT ?,? WHERE (SELECT COUNT(*) FROM login_attempts WHERE id LIKE ? AND attempted_at >= ?) < ?"
-        ).bind(prefix + crypto.randomUUID(), now, prefix + "%", cutoff, LOGIN_LIMIT).run();
+          "INSERT INTO login_attempts(id,attempted_at) SELECT ?,? WHERE (SELECT COUNT(*) FROM login_attempts WHERE substr(id, 1, length(?3)) = ?3 AND attempted_at >= ?) < ?"
+        ).bind(prefix + crypto.randomUUID(), now, prefix, cutoff, LOGIN_LIMIT).run();
         if (!reservation.meta.changes) return json({error: "Too many login attempts. Try later."}, 429);
         const passwordCorrect = await verifyPassword(password, await activePasswordHash(env));
         const usernameCorrect = username === env.ADMIN_USERNAME;
@@ -134,8 +135,8 @@ export default {
           VALUES (?, ?, ?)
         `).bind(crypto.randomUUID(), tokenHash, expiresAt).run();
 
-        await env.DB.prepare(`DELETE FROM login_attempts WHERE id LIKE ?`)
-          .bind(prefix + "%").run();
+        await env.DB.prepare(`DELETE FROM login_attempts WHERE substr(id, 1, length(?1)) = ?1`)
+          .bind(prefix).run();
 
         return json({ success: true, token, expires_at: expiresAt });
       }
@@ -143,7 +144,7 @@ export default {
       // All routes below require a valid administrator session.
       if (path === "/api/admin/reset-password" && method === "POST") {
         const body = await readBody(request);
-        if (!validNewPassword(body.new_password, env.ADMIN_USERNAME)) return json({error:"Use 8-128 characters and avoid common passwords; 12 or more is recommended"},400);
+        if (!validNewPassword(body.new_password, env.ADMIN_USERNAME)) return json({error:"Use 6-128 characters and avoid common passwords; 12 or more is recommended"},400);
         if (!await reserveCredentialAttempt(request,env,"recovery")) return json({error:"Too many login attempts. Try later."},429);
         const credentials = await env.DB.prepare("SELECT recovery_hash FROM admin_credentials WHERE id=1").first();
         if (typeof body.recovery_code!=="string" || !/^[a-f0-9]{64}$/.test(body.recovery_code) ||
@@ -180,7 +181,7 @@ export default {
           if(typeof body.current_password!=="string" || body.current_password.length>1024 ||
             !await verifyPassword(body.current_password,await activePasswordHash(env)))return json({error:"Current password is incorrect"},400);
           if(path==="/api/admin/change-password"){
-            if(!validNewPassword(body.new_password,env.ADMIN_USERNAME))return json({error:"Use 8-128 characters and avoid common passwords; 12 or more is recommended"},400);
+            if(!validNewPassword(body.new_password,env.ADMIN_USERNAME))return json({error:"Use 6-128 characters and avoid common passwords; 12 or more is recommended"},400);
             if(await verifyPassword(body.new_password,await activePasswordHash(env)))return json({error:"Choose a different password"},400);
             const hash=await passwordHash(body.new_password);
             await env.DB.batch([
@@ -237,24 +238,6 @@ export default {
           const candidates=await archiveCandidates(env,before);
           return json({before,candidates,notice:"Ongoing series, count-only series and any series with exceptions are protected."});
         }
-        if(path==="/api/admin/archive-cleanup" && method==="POST"){
-          const body=await readBody(request),before=body.before;
-          if(!validArchiveCutoff(before))return json({error:"Keep the current and previous calendar year online"},400);
-          if(body.backup_confirmed!==true||body.confirm!=="DELETE BEFORE "+before)return json({error:"Confirm downloaded PDF and JSON backups before cleanup"},400);
-          const candidates=await archiveCandidates(env,before);
-          const statements=candidates.map(e=>env.DB.prepare(
-            "DELETE FROM events WHERE id=? AND updated_at=? AND "+
-            "((NOT EXISTS(SELECT 1 FROM recurrence_rules WHERE event_id=events.id) AND substr(COALESCE(end_at,start_at),1,10)<?) OR "+
-            "EXISTS(SELECT 1 FROM recurrence_rules r WHERE r.event_id=events.id AND r.updated_at=? AND r.until_date IS NOT NULL "+
-            "AND date(r.until_date,'+' || MAX(0,CAST(julianday(substr(COALESCE(events.end_at,events.start_at),1,10))-julianday(substr(events.start_at,1,10)) AS INTEGER)) || ' days')<? "+
-            "AND NOT EXISTS(SELECT 1 FROM event_exceptions x WHERE x.recurrence_rule_id=r.id)))"
-          ).bind(e.id,e.updated_at,before,e.rule_updated_at||"",before));
-          // Explicit, interactive action only. Never run this on a timer.
-          statements.push(auditStatement(env,"archive_cleanup","calendar",null,{before,candidate_ids:candidates.map(e=>e.id),backup_confirmed:true}));
-          const result=await env.DB.batch(statements);
-          return json({success:true,deleted:result.slice(0,-1).reduce((n,r)=>n+Number(r.meta?.changes||0),0),before});
-        }
-
         // Administrator: list categories.
         if (path === "/api/admin/categories" && method === "GET") {
           const result = await env.DB.prepare(`
@@ -515,7 +498,7 @@ export default {
             const result = await env.DB.prepare(`
               SELECT id, original_start_at, action, override_json, created_at
               FROM event_exceptions WHERE recurrence_rule_id = ?
-              ORDER BY original_start_at ASC LIMIT 500
+              ORDER BY original_start_at ASC LIMIT 501
             `).bind(ruleId).all();
             return json({ exceptions: result.results });
           }
@@ -665,9 +648,9 @@ async function activePasswordHash(env) {
   return row?.password_hash || env.ADMIN_PASSWORD_HASH;
 }
 function validNewPassword(password, username) {
-  return typeof password==="string" && password.length>=8 && password.length<=128 &&
-    password.trim().length>=8 && !/^(.)\1+$/u.test(password) &&
-    !["12345678","password","password1","qwertyui","admin123","87654321",String(username).toLowerCase()].includes(password.toLowerCase());
+  return typeof password==="string" && password.length>=6 && password.length<=128 &&
+    password.trim().length>=6 && !/^(.)\1+$/u.test(password) &&
+    !["123456","654321","12345678","password","password1","qwertyui","admin123","87654321",String(username).toLowerCase()].includes(password.toLowerCase());
 }
 async function passwordHash(password) {
   const salt=crypto.getRandomValues(new Uint8Array(16));
@@ -678,8 +661,8 @@ async function passwordHash(password) {
 async function reserveCredentialAttempt(request,env,scope) {
   const now=Math.floor(Date.now()/1000),ip=request.headers.get("CF-Connecting-IP")||"unknown";
   const prefix=scope+":"+await sha256(ip)+":";
-  const result=await env.DB.prepare("INSERT INTO login_attempts(id,attempted_at) SELECT ?,? WHERE (SELECT COUNT(*) FROM login_attempts WHERE id LIKE ? AND attempted_at >= ?) < ?")
-    .bind(prefix+crypto.randomUUID(),now,prefix+"%",now-LOGIN_WINDOW_SECONDS,LOGIN_LIMIT).run();
+  const result=await env.DB.prepare("INSERT INTO login_attempts(id,attempted_at) SELECT ?,? WHERE (SELECT COUNT(*) FROM login_attempts WHERE substr(id, 1, length(?3)) = ?3 AND attempted_at >= ?) < ?")
+    .bind(prefix+crypto.randomUUID(),now,prefix,now-LOGIN_WINDOW_SECONDS,LOGIN_LIMIT).run();
   return !!result.meta.changes;
 }
 async function saveCalendarEvent(env, body, eventId) {
@@ -1146,8 +1129,9 @@ async function loadExceptions(env, ids) {
   const res = await env.DB.prepare(`
     SELECT recurrence_rule_id, original_start_at, action, override_json
     FROM event_exceptions WHERE recurrence_rule_id IN (${params})
-    LIMIT 5000
+    LIMIT 5001
   `).bind(...ids).all();
+  if (res.results.length > 5000) throw new Error("TOO_MANY_OCCURRENCES");
   const out = new Map();
   for (const e of res.results) {
     const key = `${e.recurrence_rule_id}|${e.original_start_at}`;
@@ -1202,7 +1186,7 @@ async function calendarOccurrences(env, from, to) {
     WHERE NOT EXISTS (SELECT 1 FROM recurrence_rules r WHERE r.event_id = e.id)
       AND substr(e.start_at, 1, 10) <= ?
       AND substr(COALESCE(e.end_at, e.start_at), 1, 10) >= ?
-    ORDER BY e.start_at ASC LIMIT 1000
+    ORDER BY e.start_at ASC LIMIT 1001
   `).bind(to, from).all();
   const ruleRows = await env.DB.prepare(`
     SELECT r.*, e.title, e.description, e.location, e.start_at, e.end_at,
@@ -1211,10 +1195,14 @@ async function calendarOccurrences(env, from, to) {
     FROM recurrence_rules r
     JOIN events e ON e.id = r.event_id
     LEFT JOIN categories c ON c.id = e.category_id
-    ORDER BY e.start_at ASC LIMIT 500
+    ORDER BY e.start_at ASC LIMIT 501
   `).all();
   const ids = ruleRows.results.map(r => r.id);
-  const exceptions = await loadExceptions(env, ids);
+  if (plain.results.length > 1000 || ruleRows.results.length > 500) throw new Error("TOO_MANY_OCCURRENCES");
+  const exceptions = new Map();
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    for (const [key, value] of await loadExceptions(env, ids.slice(offset, offset + 100))) exceptions.set(key, value);
+  }
   const result = [...plain.results.map(e => ({ ...e, is_recurring: false }))];
   for (const r of ruleRows.results) {
     result.push(...expandSeries(r, from, to, exceptions));
