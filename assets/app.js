@@ -424,8 +424,19 @@ monthForm.onsubmit=event=>{
 };
 $('today').onclick=()=>{state.month=today.slice(0,7);state.selected=today;reload();};
 $('refresh').onclick=reload;
-try{document.body.dataset.theme=localStorage.getItem('nds-theme')||'day';}catch{}
-$('theme').onclick=()=>{document.body.dataset.theme=document.body.dataset.theme==='night'?'day':'night';try{localStorage.setItem('nds-theme',document.body.dataset.theme);}catch{}};
+function applyTheme(theme){
+  document.body.dataset.theme=theme;
+  document.querySelector('meta[name="theme-color"]').content =
+    getComputedStyle(document.body).getPropertyValue('--bg').trim();
+}
+let savedTheme;
+try{savedTheme=localStorage.getItem('nds-theme');}catch{}
+applyTheme(savedTheme==='night'?'night':'day');
+$('theme').onclick=()=>{
+  const theme=document.body.dataset.theme==='night'?'day':'night';
+  applyTheme(theme);
+  try{localStorage.setItem('nds-theme',theme);}catch{}
+};
 try{const saved=JSON.parse(sessionStorage.getItem(storageKey));if(saved?.token&&Date.parse(saved.expires_at)>Date.now())state.session=saved;}catch{}
 const portraitLayout=matchMedia('(orientation: portrait)');
 function placeFilters(){
