@@ -340,10 +340,11 @@ body[data-theme="night"] .solar-term { color:#8bd8b4; }
   border-bottom:1px solid var(--line);
 }
 .events-head h2 { font-size:1rem; margin:0; }
+.events-head > div:first-child { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; }
 .events-date {
   color:var(--muted);
   font-size:.8rem;
-  margin-top:4px;
+  margin-top:0;
 }
 .google-link {
   color:var(--accent);
