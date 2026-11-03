@@ -1057,3 +1057,5 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+#portraitFilters .calendar-checks { border-bottom: 0; }
