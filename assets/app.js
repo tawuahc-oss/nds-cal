@@ -404,6 +404,24 @@ for(const id of ['newEvent','addEvent'])$(id).onclick=()=>openEditor();
 for(const [id,delta] of [['prev',-1],['next',1]])$(id).onclick=()=>{
   const [y,m]=state.month.split('-').map(Number);state.month=new Date(Date.UTC(y,m-1+delta,1)).toISOString().slice(0,7);state.selected=state.month+'-01';reload();
 };
+const monthForm=$('monthForm');
+const monthFields=monthForm.elements;
+for(let month=1;month<=12;month++){
+  monthFields.month.add(new Option(month+'月',String(month).padStart(2,'0')));
+}
+$('monthTitle').onclick=()=>{
+  const [year,month]=state.month.split('-');
+  monthFields.year.value=year;
+  monthFields.month.value=month;
+  $('monthDialog').showModal();
+};
+monthForm.onsubmit=event=>{
+  event.preventDefault();
+  state.month=Number(monthFields.year.value)+'-'+monthFields.month.value;
+  state.selected=state.month===today.slice(0,7)?today:state.month+'-01';
+  $('monthDialog').close();
+  reload();
+};
 $('today').onclick=()=>{state.month=today.slice(0,7);state.selected=today;reload();};
 $('refresh').onclick=reload;
 try{document.body.dataset.theme=localStorage.getItem('nds-theme')||'day';}catch{}
