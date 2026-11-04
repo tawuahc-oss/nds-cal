@@ -1059,3 +1059,24 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
 }
 
 #portraitFilters .calendar-checks { border-bottom: 0; }
+
+@media screen and (orientation: landscape) {
+  .app {
+    padding: max(4px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(4px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+  }
+  .app > .calendar-checks {
+    padding: 0 0 3px;
+    margin: 0;
+    border: 0;
+    gap: 4px;
+  }
+  .app > .calendar-checks label {
+    font-size: .7rem;
+    padding: 1px 5px;
+    gap: 3px;
+  }
+  .app > .calendar-checks input { min-height: 0; margin: 0; }
+}
