@@ -8,7 +8,8 @@
     "build": "node --check assets/app.js && node scripts/build-assets.mjs && node scripts/build-site.mjs",
     "preview": "node scripts/preview.mjs",
     "update:holidays": "node scripts/update-holidays.mjs",
-    "worker:check": "wrangler deploy --dry-run"
+    "worker:check": "wrangler deploy --dry-run",
+    "deploy": "npm test && npm run build && wrangler deploy --keep-vars"
   },
   "type": "module",
   "dependencies": {
