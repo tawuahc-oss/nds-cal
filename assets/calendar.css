@@ -79,6 +79,7 @@ h1 {
 }
 
 /* 夜間模式 */
+html[data-theme="night"],
 body[data-theme="night"] {
   --bg:#17191f;
   --paper:#22252d;
@@ -88,6 +89,16 @@ body[data-theme="night"] {
   --accent:#d5a979;
   background:var(--bg);
   color:var(--ink);
+}
+
+html { min-height: 100dvh; color-scheme: light; }
+html[data-theme="night"] { color-scheme: dark; }
+body { min-height: 100dvh; }
+.app { background: var(--bg); }
+body[data-theme="night"] .calendar-checks label {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--line);
 }
 body[data-theme="night"] .weekdays,
 body[data-theme="night"] .lwday {
@@ -340,7 +351,12 @@ body[data-theme="night"] .solar-term { color:#8bd8b4; }
   border-bottom:1px solid var(--line);
 }
 .events-head h2 { font-size:1rem; margin:0; }
-.events-head > div:first-child { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; }
+.events-head > div:first-child {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:2px 8px;
+}
 .events-date {
   color:var(--muted);
   font-size:.8rem;
@@ -750,7 +766,7 @@ body[data-theme="night"] .solar-term { color:#8bd8b4; }
   padding: 0;
   border-radius: 10px;
 }
-.icon-action svg { width: 22px; height: 22px; }
+
 .icon-action .moon-icon,
 body[data-theme="night"] .icon-action .sun-icon { display: none; }
 body[data-theme="night"] .icon-action .moon-icon { display: block; }
@@ -879,6 +895,7 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
 }
 .day-card small { color: var(--muted); }
 #portraitFilters:not(:empty) { border-block: 1px solid var(--line); }
+#portraitFilters .calendar-checks { border-bottom: 0; }
 .category-drag { cursor: grab; padding: 8px; font-size: 1.2rem; }
 
 @media screen and (orientation: landscape) {
@@ -917,10 +934,10 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
 }
 .monthbar { grid-column: 1 / -1; margin: 0; }
 .app {
-  padding-left: max(clamp(8px, 2vw, 24px), env(safe-area-inset-left));
-  padding-right: max(clamp(8px, 2vw, 24px), env(safe-area-inset-right));
-  padding-top: max(clamp(8px, 2vw, 24px), env(safe-area-inset-top));
-  padding-bottom: max(clamp(8px, 2vw, 24px), env(safe-area-inset-bottom));
+  padding-left: max(clamp(12px, 3vw, 28px), env(safe-area-inset-left));
+  padding-right: max(clamp(12px, 3vw, 28px), env(safe-area-inset-right));
+  padding-top: max(clamp(12px, 3vw, 28px), env(safe-area-inset-top));
+  padding-bottom: max(clamp(12px, 3vw, 28px), env(safe-area-inset-bottom));
 }
 
 @media screen and (orientation: landscape) and (max-height: 520px) {
@@ -973,8 +990,8 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
 }
 
 /* Use the short screen edge so rotating a phone keeps the same title sizes. */
-.top .brand { font-size: .7rem; }
-.top h1 { font-size: clamp(1.5rem, 4vmin, 2.3rem); }
+.top .brand { font-size: .7rem; line-height: 1.5; margin: 0; }
+.top h1 { font-size: clamp(1.5rem, 4vmin, 2.3rem); line-height: 1.1; margin: 2px 0 0; }
 .top .month-title { font-size: clamp(1.3rem, 3vmin, 2.3rem); font-weight: 400; }
 
 @media screen and (orientation: landscape) {
@@ -1013,6 +1030,24 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
 #monthTitle { font: inherit; font-size: 1rem; padding-inline: 8px; white-space: nowrap; }
 #monthDialog { width: min(380px, 94vw); }
 
+.top-actions { position: relative; }
+.top-actions #status {
+  position: absolute;
+  grid-area: 1 / 1 / 2 / 2;
+  right: calc(100% + 6px);
+  bottom: 0;
+  width: max-content;
+  max-width: min(12rem, 46vw);
+  margin: 0;
+  min-height: 0;
+  font-size: .7rem;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cal-shell .datebutton { font-size: .95em; }
 .cal-shell .lunar-info { font-size: .62rem; }
 
@@ -1020,7 +1055,7 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
   .cal-shell .lunar-info { font-size: .57rem; }
 }
 
-@media screen and (orientation: landscape) {
+@media screen {
   #detailDialog {
     width: fit-content;
     max-width: min(420px, calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 32px));
@@ -1040,43 +1075,38 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
   #detailActions:empty { display: none; }
 }
 
-.top-actions { position: relative; }
-.top-actions #status {
-  position: absolute;
-  grid-area: 1 / 1 / 2 / 2;
-  right: calc(100% + 6px);
-  bottom: 0;
-  width: max-content;
-  max-width: min(12rem, 46vw);
-  margin: 0;
-  min-height: 0;
-  font-size: .7rem;
-  line-height: 1.2;
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-#portraitFilters .calendar-checks { border-bottom: 0; }
-
 @media screen and (orientation: landscape) {
-  .app {
-    padding: max(4px, env(safe-area-inset-top))
-      max(8px, env(safe-area-inset-right))
-      max(4px, env(safe-area-inset-bottom))
-      max(8px, env(safe-area-inset-left));
+  .cal-shell .calendar-event {
+    display: block;
+    position: relative;
+    padding-left: 11px;
+    min-height: 0;
+    height: auto;
+    padding: 1px 0 1px 11px;
+    margin: 0 0 2px;
+    line-height: 1.25;
   }
-  .app > .calendar-checks {
-    padding: 0 0 3px;
+  .cal-shell .calendar-event::before {
+    position: absolute;
+    left: 0;
+    top: .35em;
     margin: 0;
-    border: 0;
-    gap: 4px;
   }
-  .app > .calendar-checks label {
-    font-size: .7rem;
-    padding: 1px 5px;
-    gap: 3px;
+  .cal-shell .calendar-event-time { white-space: nowrap; margin-right: 4px; }
+  .cal-shell .calendar-event-title { min-width: 0; overflow-wrap: anywhere; }
+  .cal-shell .calendar-event.all-day {
+    display: block;
+    padding: 2px 4px;
   }
-  .app > .calendar-checks input { min-height: 0; margin: 0; }
 }
+
+/* Shared responsive calendar layout */
+
+@media screen and (orientation:landscape) {
+  body > main.app { padding:max(4px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); }
+  main.app > #filters { padding:0 0 3px; margin:0; border:0; gap:4px; }
+  main.app > #filters label { font-size:.7rem; padding:1px 5px; gap:3px; }
+  main.app > #filters input { min-height:0; margin:0; }
+}
+@media screen and (orientation:landscape) and (min-height:521px) { body > main.app { padding-top:max(28px,env(safe-area-inset-top)); padding-bottom:4px; } }@media screen and (orientation:landscape) { body > main.app:not(:has(#adminPanel:not([hidden]))) { position:fixed; top:var(--calendar-viewport-top,0px); right:0; bottom:auto; left:0; width:100%; height:calc(var(--calendar-viewport-height,100dvh) - 4px); margin:0; padding-bottom:0; } main.app:not(:has(#adminPanel:not([hidden]))) > .cal-shell { margin-bottom:0; } }
+#portraitFilters .calendar-checks { border-bottom:0; }

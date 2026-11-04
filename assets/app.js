@@ -10,7 +10,7 @@ const state={month:today.slice(0,7),selected:today,events:[],categories:[],admin
 const f=$('eventForm').elements;
 const node=(tag,text,className)=>{const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;};
 const button=(text,action,className)=>{const b=node('button',text,className);b.type='button';b.onclick=action;return b;};
-const report=(text,error=false)=>{$('status').textContent=(preview?'本機測試資料（不會修改雲端）｜':'')+text;$('status').dataset.error=String(error);};
+const report=(text,error=false)=>{$('status').textContent=(preview&&!text.startsWith('已更新')?'本機測試資料（不會修改雲端）｜':'')+text;$('status').dataset.error=String(error);};
 const saveSession=value=>{state.session=value;try{if(value)sessionStorage.setItem(storageKey,JSON.stringify(value));else sessionStorage.removeItem(storageKey);}catch{}renderAuth();};
 const errorText=message=>{
   const map={'Unauthorized':'登入已失效，請重新登入。','Origin not allowed':'目前網址未獲 API 允許，請使用設定好的本機網址。',
@@ -44,12 +44,17 @@ function range(){
 }
 function visible(e){return state.filters.get(e.category_id||'')!==false;}
 function eventsOn(day){return state.events.filter(e=>visible(e)&&e.start_at.slice(0,10)<=day&&(e.end_at||e.start_at).slice(0,10)>=day);}
-function time(e){return e.all_day?'全日':e.start_at.slice(11,16);}
+function clockTime(value){
+  const [hour,minute]=value.slice(11,16).split(':');
+  const hours=Number(hour);
+  return (hours%12||12)+':'+minute+' '+(hours<12?'AM':'PM');
+}
+function time(e){return e.all_day?'全日':clockTime(e.start_at);}
 const detailDateFormat=new Intl.DateTimeFormat('zh-HK',{
   timeZone:'Asia/Hong_Kong',year:'numeric',month:'long',day:'numeric'
 });
-const detailTimeFormat=new Intl.DateTimeFormat('zh-HK',{
-  timeZone:'Asia/Hong_Kong',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+const detailTimeFormat=new Intl.DateTimeFormat('en-US',{
+  timeZone:'Asia/Hong_Kong',hour:'numeric',minute:'2-digit',hour12:true
 });
 function detailDateTime(value,allDay){
   if(!value)return value;
@@ -60,20 +65,40 @@ function detailDateTime(value,allDay){
   const day=detailDateFormat.format(date);
   return allDay?day+'（全日）':day+' '+detailTimeFormat.format(date);
 }
-const detailDialog=$('detailDialog');
-function isOutsideDetail(event){
-  const {left,right,top,bottom}=detailDialog.getBoundingClientRect();
-  return event.target===detailDialog&&
-    (event.clientX<left||event.clientX>right||event.clientY<top||event.clientY>bottom);
+for (const dialog of document.querySelectorAll('dialog')) {
+  let outsidePointer = null;
+  let outsideTouch = null;
+  function isOutside(point) {
+    const {left, right, top, bottom} = dialog.getBoundingClientRect();
+    return point.clientX < left || point.clientX > right || point.clientY < top || point.clientY > bottom;
+  }
+  dialog.addEventListener('pointerdown', event => {
+    if (event.pointerType !== "touch" && event.isPrimary && event.button === 0) {
+      outsidePointer = isOutside(event) ? event.pointerId : null;
+    }
+  });
+  dialog.addEventListener('pointerup', event => {
+    if (outsidePointer !== event.pointerId) return;
+    outsidePointer = null;
+    if (isOutside(event)) dialog.close();
+  });
+  dialog.addEventListener('pointercancel', event => {
+    if (outsidePointer === event.pointerId) outsidePointer = null;
+  });
+  dialog.addEventListener('touchstart', event => {
+    const touch = event.touches[0];
+    outsideTouch = event.touches.length === 1 && isOutside(touch) ? touch.identifier : null;
+  }, {passive: true});
+  dialog.addEventListener('touchend', event => {
+    const touch = Array.from(event.changedTouches).find(point => point.identifier === outsideTouch);
+    outsideTouch = null;
+    if (!touch || !isOutside(touch)) return;
+    if (event.cancelable) event.preventDefault();
+    dialog.close();
+  }, {passive: false});
+  dialog.addEventListener('touchcancel', () => { outsideTouch = null; });
+  dialog.addEventListener('close', () => { outsidePointer = outsideTouch = null; });
 }
-let detailPressOutside=false;
-detailDialog.addEventListener('pointerdown',event=>{
-  detailPressOutside=isOutsideDetail(event);
-});
-detailDialog.addEventListener('click',event=>{
-  if(detailPressOutside&&isOutsideDetail(event))detailDialog.close();
-  detailPressOutside=false;
-});
 function color(e){return /^#[\da-f]{6}$/i.test(e.category_color||'')?e.category_color:'#87684a';}
 function renderAuth(){
   const logged=!!state.session;
@@ -99,6 +124,10 @@ function renderCalendar(){
     const d=i-first+1;
     if(d<1||d>last){root.append(node('div',undefined,'day blank'));continue;}
     const day=state.month+'-'+String(d).padStart(2,'0'),cell=node('div',undefined,'day'+(day===today?' today':'')+(day===state.selected?' selected':''));
+    cell.onclick=event=>{
+      if(event.target.closest('button,.calendar-event'))return;
+      state.selected=day;renderCalendar();
+    };
     const header=node('div',undefined,'dayheader'),date=button(String(d),()=>{state.selected=day;renderCalendar();},'datebutton');
     date.setAttribute('aria-label',day+'，查看當日活動');
     const lunar=lunarInfo(day),info=node('span',[lunar.date,lunar.term,...lunar.festivals].filter(Boolean).join(' '),'lunar-info');
@@ -107,7 +136,10 @@ function renderCalendar(){
     const eventMarkers=node('div',undefined,'event-markers');
     const timedMarkers=node('div',undefined,'timed-markers');
     for(const e of eventsOn(day)){
-      const b=button(e.all_day?e.title:time(e)+' '+e.title,()=>showDetails(e),'calendar-event'+(e.all_day?' all-day':''));
+      const className='calendar-event'+(e.all_day?' all-day':'');
+      const b=portraitLayout.matches?node('span','',className):button('',()=>showDetails(e),className);
+      if(!e.all_day)b.append(node('span',time(e),'calendar-event-time'));
+      b.append(node('span',e.title,'calendar-event-title'));
       b.style.setProperty('--event-color',color(e));b.setAttribute('aria-label',time(e)+' '+e.title);
       if(e.all_day)eventMarkers.append(b);
       else timedMarkers.append(b);
@@ -116,17 +148,33 @@ function renderCalendar(){
     if(eventMarkers.childElementCount)cell.append(eventMarkers);
     root.append(cell);
   }
+  renderBirthdays();
   $('dayDate').textContent=new Intl.DateTimeFormat('zh-HK',{dateStyle:'full',timeZone:'Asia/Hong_Kong'}).format(new Date(state.selected+'T00:00:00+08:00'))+' · 農曆'+lunarInfo(state.selected).date;
   const list=$('dayList');list.replaceChildren();
   for(const e of eventsOn(state.selected)){
     const card=button('',()=>showDetails(e),'day-card');
     card.style.setProperty('--event-color',color(e));
-    const hours=!e.all_day&&e.end_at?time(e)+' – '+e.end_at.slice(11,16):time(e);
+    const hours=!e.all_day&&e.end_at?time(e)+' – '+clockTime(e.end_at):time(e);
     card.append(node('strong',e.title),node('small',[hours,e.category_name,e.location].filter(Boolean).join(' · ')));
     list.append(card);
   }
   if(!list.children.length)list.append(node('p','當日沒有符合篩選條件的活動。','hint'));
   if(state.filters.get('holidays')!==false)for(const h of state.holidays?.events.filter(h=>h.date===state.selected)||[])list.append(node('p',h.title==='公眾假期'?h.title:'香港公眾假期：'+h.title,'holiday-label'));
+}
+function renderBirthdays(){
+  const list=$('birthdayList');
+  list.replaceChildren();
+  $('birthdayTitle').textContent=Number(state.month.slice(5,7))+'月生日';
+  const birthdays=state.events.filter(event=>
+    event.start_at.slice(0,7)===state.month&&event.category_name==='學生生日'
+  ).sort((a,b)=>a.start_at.localeCompare(b.start_at)||a.title.localeCompare(b.title,'zh-HK'));
+  for(const event of birthdays){
+    const card=button('',()=>showDetails(event),'day-card');
+    card.style.setProperty('--event-color',color(event));
+    card.append(node('strong',event.title),node('small',Number(event.start_at.slice(5,7))+'月'+Number(event.start_at.slice(8,10))+'日'));
+    list.append(card);
+  }
+  if(!birthdays.length)list.append(node('p','本月沒有生日紀錄。','hint'));
 }
 function renderAdmin(){
   const root=$('adminEvents');root.replaceChildren();
@@ -154,7 +202,7 @@ async function reload(){
     if(hadSession&&state.session){
       state.adminEvents=adminEvents.events;state.rules=rules.recurrences;
     }
-    renderFilters();renderCalendar();renderAdmin();report('已更新。'+(state.holidays&&!state.holidays.years.includes(state.month.slice(0,4))?'此年份的香港公眾假期尚未公布／收錄。':''));
+    renderFilters();renderCalendar();renderAdmin();report('已更新'+(state.holidays&&!state.holidays.years.includes(state.month.slice(0,4))?'。此年份的香港公眾假期尚未公布／收錄。':''));
   }catch(e){if(sequence===state.loading){if(hadSession&&!state.session){await reload();report('登入已失效，仍可查看公開月曆。',true);return;}state.events=[];renderCalendar();report(e.message,true);}}
   finally{if(sequence===state.loading)$('refresh').disabled=false;}
 }
@@ -423,20 +471,31 @@ monthForm.onsubmit=event=>{
   reload();
 };
 $('today').onclick=()=>{state.month=today.slice(0,7);state.selected=today;reload();};
-$('refresh').onclick=reload;
+$('refresh').onclick=()=>window.location.reload();
+const themeKey = "nds-theme";
+const themeUrl = new URL(window.location.href);
+const incomingTheme = themeUrl.searchParams.get("theme");
+const themeLink = document.querySelector('a[aria-label="北區週報"]');
 function applyTheme(theme){
-  document.body.dataset.theme=theme;
+  document.documentElement.dataset.theme = theme;
+  document.body.dataset.theme = theme;
   document.querySelector('meta[name="theme-color"]').content =
-    getComputedStyle(document.body).getPropertyValue('--bg').trim();
+    getComputedStyle(document.body).getPropertyValue("--bg").trim();
+  const destination = new URL(themeLink.href);
+  destination.searchParams.set("theme",theme);
+  themeLink.href = destination.href;
+  const current = new URL(window.location.href);
+  current.searchParams.set("theme",theme);
+  if (current.href !== window.location.href) history.replaceState(history.state,"",current);
+  try { localStorage.setItem(themeKey,theme); } catch {}
 }
 let savedTheme;
-try{savedTheme=localStorage.getItem('nds-theme');}catch{}
-applyTheme(savedTheme==='night'?'night':'day');
-$('theme').onclick=()=>{
-  const theme=document.body.dataset.theme==='night'?'day':'night';
-  applyTheme(theme);
-  try{localStorage.setItem('nds-theme',theme);}catch{}
-};
+try { savedTheme = localStorage.getItem(themeKey); } catch {}
+const hasIncomingTheme = incomingTheme === "day" || incomingTheme === "night";
+applyTheme(hasIncomingTheme ? incomingTheme : savedTheme === "night" ? "night" : "day");
+
+$('theme').onclick = () => applyTheme(document.body.dataset.theme === "night" ? "day" : "night");
+
 try{const saved=JSON.parse(sessionStorage.getItem(storageKey));if(saved?.token&&Date.parse(saved.expires_at)>Date.now())state.session=saved;}catch{}
 const portraitLayout=matchMedia('(orientation: portrait)');
 function placeFilters(){
@@ -444,7 +503,7 @@ function placeFilters(){
   if(portraitLayout.matches)$('portraitFilters').append(filters);
   else document.querySelector('.cal-shell').before(filters);
 }
-portraitLayout.addEventListener('change',placeFilters);
+portraitLayout.addEventListener('change',()=>{placeFilters();renderCalendar();});
 placeFilters();
 renderAuth();renderCalendar();
 fetch('./assets/data/hk-holidays.json').then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{
@@ -457,3 +516,18 @@ reload();
 // Other visitors see changes within a minute without redeploying the site.
 setInterval(()=>{if(!document.hidden&&!state.mutating&&!document.querySelector('dialog[open]'))reload();},60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!state.mutating)reload();});
+
+// Keep the landscape calendar inside the currently visible browser area.
+function updateCalendarViewport(){
+  const viewport = window.visualViewport;
+  if(viewport && viewport.scale !== 1) return;
+  const height = viewport ? viewport.height : window.innerHeight;
+  const top = viewport ? viewport.offsetTop : 0;
+  document.documentElement.style.setProperty("--calendar-viewport-height", height + "px");
+  document.documentElement.style.setProperty("--calendar-viewport-top", top + "px");
+}
+updateCalendarViewport();
+window.addEventListener("resize", updateCalendarViewport);
+window.addEventListener("pageshow", updateCalendarViewport);
+window.visualViewport?.addEventListener("resize", updateCalendarViewport);
+window.visualViewport?.addEventListener("scroll", updateCalendarViewport);
