@@ -105,7 +105,7 @@ function renderAuth(){
   for(const id of ['adminPanel','logout','addEvent'])$(id).hidden=!logged;
   $('loginOpen').hidden=logged;
   $('adminName').textContent=logged?(state.session.username||'管理員'):'';
-  if(!logged){state.adminEvents=[];state.rules=[];$('adminEvents').replaceChildren();}
+  if(!logged){state.adminEvents=[];state.rules=[];$('adminEvents').replaceChildren();$('adminBirthdays').replaceChildren();$('adminBirthdaySection').hidden=true;}
 }
 function renderFilters(){
   const root=$('filters'),legend=$('categoryLegend');root.replaceChildren();legend.replaceChildren();
@@ -178,14 +178,19 @@ function renderBirthdays(){
 }
 function renderAdmin(){
   const root=$('adminEvents');root.replaceChildren();
+  const birthdays=$('adminBirthdays');birthdays.replaceChildren();
   for(const e of state.adminEvents){
     const r=state.rules.find(r=>r.event_id===e.id),row=node('div',undefined,'admin-row'),info=node('div');
     info.append(node('strong',e.title),node('small',e.start_at+'　'+ruleDescription(r,e.start_at)));
     const actions=node('div',undefined,'actions');actions.append(button('編輯',()=>openEditor(e,r)),button(r?'刪除整個系列':'刪除',()=>deleteEvent(e,r),'danger'));
     if(r)actions.append(button('單次活動／恢復',()=>showSeries(r)));
-    row.append(info,actions);root.append(row);
+    row.append(info,actions);
+    const category=state.categories.find(category=>category.id===e.category_id);
+    const target=(e.category_name||category?.name||'').includes('生日')?birthdays:root;
+    target.append(row);
   }
-  if(!root.children.length)root.append(node('p','尚未新增活動。'));
+  $('adminBirthdaySection').hidden=!birthdays.children.length;
+  if(!state.adminEvents.length)root.append(node('p','尚未新增活動。'));
 }
 async function reload(){
   const sequence=++state.loading,hadSession=!!state.session;report('正在讀取活動…');$('refresh').disabled=true;

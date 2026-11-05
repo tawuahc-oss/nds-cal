@@ -22,9 +22,10 @@
 <section class="cal-shell" aria-label="月曆"><div class="weekdays"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div><div id="days" class="days"></div><div id="categoryLegend" class="category-legend" aria-label="分類圖例"></div></section>
 <section class="day-events"><div class="events-head"><div><h2 id="dayTitle">當日活動</h2><div class="events-date" id="dayDate"></div></div><button class="primary" id="addEvent" hidden>新增活動</button></div><div id="portraitFilters"></div><div id="dayList" class="day-event-list"></div></section>
 <section id="adminPanel" class="admin-panel" hidden><div class="section-head"><h2>管理員後台</h2><span id="adminName"></span></div>
-<p>所有活動及重複規則均可在同一張表格儲存。修改會立即更新月曆。</p><div class="actions"><button id="newEvent" class="primary">新增活動</button><button id="manageCategories">管理分類</button><button id="accountOpen">帳戶安全</button><button id="exportJson">下載完整活動 JSON</button><button id="exportPdf">匯出 A4 PDF</button><button id="archiveOpen">年度封存／兩年保留</button></div><h3>活動與重複系列</h3><div id="adminEvents"></div></section>
-<p class="notice">時區：香港（UTC+8）。農曆及節氣按日期計算。教會活動由獲授權管理員管理。</p>
+<p>所有活動及重複規則均可在同一張表格儲存。修改會立即更新月曆。</p><div class="actions"><button id="newEvent" class="primary">新增活動</button><button id="manageCategories">管理分類</button><button id="accountOpen">帳戶安全</button><button id="exportJson">下載完整活動 JSON</button><button id="exportPdf">匯出 A4 PDF</button><button id="archiveOpen">年度封存／兩年保留</button></div><h3>活動與重複系列</h3><div id="adminEvents"></div><details id="adminBirthdaySection" hidden><summary>生日</summary><div id="adminBirthdays"></div></details></section>
 <section class="day-events" aria-labelledby="birthdayTitle"><div class="events-head"><h2 id="birthdayTitle">本月生日</h2></div><div id="birthdayList" class="day-event-list"></div></section>
+<p class="notice">時區：香港（UTC+8）。農曆及節氣按日期計算。教會活動由獲授權管理員管理。</p>
+
 </main>
 <dialog id="monthDialog" aria-labelledby="monthDialogTitle"><form id="monthForm">
 <h2 id="monthDialogTitle">選擇年月</h2><div class="form-grid">
