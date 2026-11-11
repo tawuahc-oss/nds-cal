@@ -11,7 +11,16 @@ const f=$('eventForm').elements;
 const node=(tag,text,className)=>{const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;};
 const button=(text,action,className)=>{const b=node('button',text,className);b.type='button';b.onclick=action;return b;};
 const report=(text,error=false)=>{$('status').textContent=(preview&&!text.startsWith('已更新')?'本機測試資料（不會修改雲端）｜':'')+text;$('status').dataset.error=String(error);};
-const saveSession=value=>{state.session=value;try{if(value)sessionStorage.setItem(storageKey,JSON.stringify(value));else sessionStorage.removeItem(storageKey);}catch{}renderAuth();};
+const saveSession=value=>{
+  state.session=value;
+  try{if(value)sessionStorage.setItem(storageKey,JSON.stringify(value));else sessionStorage.removeItem(storageKey);}catch{}
+  renderAuth();
+  if(!value){
+    state.events=state.events.map(({notes,...event})=>event);
+    $('detailDialog').close();$('detailBody').replaceChildren();$('detailActions').replaceChildren();
+    renderCalendar();
+  }
+};
 const errorText=message=>{
   const map={'Unauthorized':'登入已失效，請重新登入。','Origin not allowed':'目前網址未獲 API 允許，請使用設定好的本機網址。',
     'Invalid username or password':'帳號或密碼不正確。','Too many login attempts. Try later.':'登入嘗試過多，請稍後再試。',
@@ -203,6 +212,7 @@ async function reload(){
       hadSession?allAdminRows('recurrences'):null
     ]);
     if(sequence!==state.loading)return;
+    if(hadSession&&!state.session){await reload();return;}
     state.categories=categories.categories;state.events=events.events;
     if(hadSession&&state.session){
       state.adminEvents=adminEvents.events;state.rules=rules.recurrences;
@@ -438,6 +448,7 @@ $('pdfForm').onsubmit=async event=>{
 };
 $('archiveOpen').onclick=()=>{
   const year=Number(today.slice(0,4));$('archiveYear').value=year-2;$('archiveBefore').value=(year-1)+'-01-01';
+  $('archiveError').textContent='';$('archiveCandidates').replaceChildren();$('archiveDialog').showModal();
 };
 for(const [id,kind] of [['archiveCalendar','calendar'],['archiveDetails','details']])$(id).onclick=()=>{
   const year=String($('archiveYear').value);
