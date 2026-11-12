@@ -3,7 +3,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 
 export async function loadWorker(path = '../worker.js') {
-  const source = await readFile(new URL(path, import.meta.url), 'utf8');
+  const source = (await readFile(new URL(path, import.meta.url), 'utf8'))
+    .replace("from './public-backup.js'",'from '+JSON.stringify(new URL('../public-backup.js',import.meta.url).href));
   // Export pure helpers only inside the test process; production exports stay unchanged.
   return import('data:text/javascript;base64,' + Buffer.from(source +
     '\nexport { validateRecurrence, expandSeries, occurrenceOrdinal, validOriginalOccurrence, validateEvent, readRange };').toString('base64'));

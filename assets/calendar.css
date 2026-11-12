@@ -1110,3 +1110,5 @@ body[data-theme="night"] .icon-action .moon-icon { display: block; }
 }
 @media screen and (orientation:landscape) and (min-height:521px) { body > main.app { padding-top:max(28px,env(safe-area-inset-top)); padding-bottom:4px; } }@media screen and (orientation:landscape) { body > main.app:not(:has(#adminPanel:not([hidden]))) { position:fixed; top:var(--calendar-viewport-top,0px); right:0; bottom:auto; left:0; width:100%; height:calc(var(--calendar-viewport-height,100dvh) - 4px); margin:0; padding-bottom:0; } main.app:not(:has(#adminPanel:not([hidden]))) > .cal-shell { margin-bottom:0; } }
 #portraitFilters .calendar-checks { border-bottom:0; }
+
+.offline-notice{margin:4px 0;padding:6px 9px;border:1px solid var(--accent);border-radius:8px;color:var(--ink);font-size:.75rem;line-height:1.4;flex-shrink:0;}

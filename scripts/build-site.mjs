@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {mkdir,rm,copyFile,writeFile,readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
+import {buildOfflineWorker} from '../offline-sw.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)),dist=resolve(root,'dist');
 if(dirname(dist)!==resolve(root))throw Error('Unsafe output path');
 // dist is generated only; never package source, backups, tests or credentials.
@@ -22,3 +23,4 @@ for(const name of files){const target=resolve(dist,'assets',name);await mkdir(di
 console.log('Public site packaged: index.html and '+files.length+' allowed assets. Test pages and all backups excluded.');
 
 await writeFile(resolve(dist,'_headers'),"/\n  Cache-Control: no-store\n/index.html\n  Cache-Control: no-store\n");
+await buildOfflineWorker(new URL('../dist/',import.meta.url),['./index.html','./manifest.webmanifest','./assets/app.js','./assets/calendar.css','./assets/lunar-info.js','./assets/recurrence-form.js','./assets/vendor/lunar.js','./assets/data/hk-holidays.json'],'calendar',['/api/categories','/api/calendar']);

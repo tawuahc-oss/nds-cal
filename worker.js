@@ -7,6 +7,7 @@
 
  */
 
+import {withPublicBackup} from './public-backup.js';
 const WEBSITE_ORIGIN = "https://tawuahc-oss.github.io";
 const ALLOWED_ORIGINS = new Set([WEBSITE_ORIGIN, "http://127.0.0.1:8080", "http://localhost:8080"]);
 const SESSION_HOURS = 8;
@@ -14,7 +15,7 @@ const LOGIN_LIMIT = 5;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
 const encoder = new TextEncoder();
 
-export default {
+const calendarWorker = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -1241,3 +1242,27 @@ async function hydrateOccurrenceCategories(items, env) {
     item.category_color = cat ? cat.color : null;
   }
 }
+
+const backupYear=()=>Number(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Hong_Kong',year:'numeric'}).format(new Date()));
+const calendarBackupKeys=url=>{
+  const from=url.searchParams.get('from')||String(backupYear()),to=url.searchParams.get('to')||from;
+  const first=Number(from.slice(0,4)),last=Number(to.slice(0,4));
+  if(!Number.isInteger(first)||first<1000||last<first||last-first>2)throw Error('Invalid backup range');
+  return Array.from({length:last-first+1},(_,i)=>String(first+i));
+};
+export default withPublicBackup(calendarWorker,{
+  prefix:'calendar:', publicPath:(path,url)=>path==='/api/categories'||path==='/api/calendar'&&url.searchParams.has('from')&&url.searchParams.has('to'),
+  keys:calendarBackupKeys,warmKeys:()=>[-1,0,1].map(n=>String(backupYear()+n)),
+  async snapshot(env,year){
+    const from=year+'-01-01',to=year+'-12-31';
+    const items=await calendarOccurrences(env,from,to);await hydrateOccurrenceCategories(items,env);
+    const categories=(await env.DB.prepare('SELECT id,name,color,sort_order FROM categories ORDER BY sort_order,name').all()).results;
+    return {categories,events:items.map(({notes,...item})=>item),from,to};
+  },
+  restore(backups,url){
+    if(url.pathname==='/api/categories')return {categories:backups[0].categories};
+    const from=url.searchParams.get('from')||backups[0].from,to=url.searchParams.get('to')||backups.at(-1).to;
+    const unique=new Map(backups.flatMap(data=>data.events).filter(e=>e.start_at.slice(0,10)<=to&&(e.end_at||e.start_at).slice(0,10)>=from).map(e=>[e.id,e]));
+    return {events:[...unique.values()].map(({notes,...event})=>event),from,to};
+  }
+});

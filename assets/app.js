@@ -6,7 +6,7 @@ const API=(!preview&&['127.0.0.1','localhost','tawuahc-oss.github.io'].includes(
 const storageKey=preview?'nds-preview-session':'nds-admin-session';
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Hong_Kong',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const state={month:today.slice(0,7),selected:today,events:[],categories:[],adminEvents:[],rules:[],
-  filters:new Map(),session:null,editing:null,categoryId:null,loading:0,mutating:false,holidays:null};
+  readOnly:false,filters:new Map(),session:null,editing:null,categoryId:null,loading:0,mutating:false,holidays:null};
 const f=$('eventForm').elements;
 const node=(tag,text,className)=>{const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;};
 const button=(text,action,className)=>{const b=node('button',text,className);b.type='button';b.onclick=action;return b;};
@@ -38,14 +38,25 @@ const errorText=message=>{
 };
 async function api(path,method='GET',body) {
   if(state.session&&Date.parse(state.session.expires_at)<=Date.now())saveSession(null);
+  const publicRequest=method==='GET'&&(/^\/api\/(categories|calendar)(?:\?|$)/).test(path);
+  const cacheKey='nds-public:'+path;
+  const fallback=()=>{try{const saved=JSON.parse(localStorage.getItem(cacheKey));if(saved?.body)return {...saved.body,stale:true,backup_saved_at:saved.saved_at};}catch{}return null;};
   let response;
-  try{response=await fetch(API+path,{method,cache:'no-store',headers:{
-    ...(state.session?{Authorization:'Bearer '+state.session.token}:{}),
+  try{response=await fetch(API+path,{method,cache:'no-store',...(method==='GET'?{signal:AbortSignal.timeout(12000)}:{}),headers:{
+    ...(state.session&&!publicRequest?{Authorization:'Bearer '+state.session.token}:{}),
     ...(body!==undefined?{'Content-Type':'application/json'}:{})},body:body===undefined?undefined:JSON.stringify(body)});}
-  catch{throw Error('無法連接伺服器，請檢查網絡及 API 來源設定。');}
+  catch{const saved=publicRequest&&fallback();if(saved)return saved;throw Error('無法連接伺服器，請檢查網絡。');}
   const data=await response.json().catch(()=>({error:'伺服器沒有回傳有效 JSON。'}));
-  if(!response.ok){if(response.status===401&&path!='/api/admin/login')saveSession(null);throw Error(errorText(data.error||'HTTP '+response.status));}
+  if(!response.ok){if(response.status>=500&&publicRequest){const saved=fallback();if(saved)return saved;}if(response.status===401&&path!='/api/admin/login')saveSession(null);throw Error(errorText(data.error||'HTTP '+response.status));}
+  if(publicRequest&&!(path.startsWith('/api/categories')?Array.isArray(data.categories):Array.isArray(data.events))){const saved=fallback();if(saved)return saved;throw Error('公開資料格式不正確。');}
+  if(publicRequest&&!data.stale){const clean={...data};if(clean.events)clean.events=clean.events.map(({notes,...event})=>event);try{localStorage.setItem(cacheKey,JSON.stringify({saved_at:new Date().toISOString(),body:clean}));}catch{}}
   return data;
+}
+function setReadOnly(value,savedAt){
+  state.readOnly=value;
+  const notice=$('offlineNotice');notice.hidden=!value;
+  notice.textContent=value?'目前為唯讀模式，顯示最近保存的公開資料'+(savedAt?'（'+new Date(savedAt).toLocaleString('zh-HK',{timeZone:'Asia/Hong_Kong'})+'）':'')+'。服務恢復後可重新登入及編輯。':'';
+  renderAuth();
 }
 function range(){
   const [y,m]=state.month.split('-').map(Number);
@@ -110,9 +121,11 @@ for (const dialog of document.querySelectorAll('dialog')) {
 }
 function color(e){return /^#[\da-f]{6}$/i.test(e.category_color||'')?e.category_color:'#87684a';}
 function renderAuth(){
-  const logged=!!state.session;
-  for(const id of ['adminPanel','logout','addEvent'])$(id).hidden=!logged;
-  $('loginOpen').hidden=logged;
+  const logged=!!state.session&&!state.readOnly;
+  for(const id of ['adminPanel','addEvent'])$(id).hidden=!logged;
+  $('logout').hidden=!state.session;
+  $('loginOpen').disabled=state.readOnly;
+  $('loginOpen').hidden=!!state.session;
   $('adminName').textContent=logged?(state.session.username||'管理員'):'';
   if(!logged){state.adminEvents=[];state.rules=[];$('adminEvents').replaceChildren();$('adminBirthdays').replaceChildren();$('adminBirthdaySection').hidden=true;}
 }
@@ -213,12 +226,19 @@ async function reload(){
     ]);
     if(sequence!==state.loading)return;
     if(hadSession&&!state.session){await reload();return;}
+    setReadOnly(!!(categories.stale||events.stale),events.backup_saved_at||categories.backup_saved_at);
     state.categories=categories.categories;state.events=events.events;
-    if(hadSession&&state.session){
+    if(hadSession&&state.session&&!state.readOnly){
       state.adminEvents=adminEvents.events;state.rules=rules.recurrences;
     }
-    renderFilters();renderCalendar();renderAdmin();report('已更新'+(state.holidays&&!state.holidays.years.includes(state.month.slice(0,4))?'。此年份的香港公眾假期尚未公布／收錄。':''));
-  }catch(e){if(sequence===state.loading){if(hadSession&&!state.session){await reload();report('登入已失效，仍可查看公開月曆。',true);return;}state.events=[];renderCalendar();report(e.message,true);}}
+    renderFilters();renderCalendar();renderAdmin();report((state.readOnly?'唯讀備份':'已更新')+(state.holidays&&!state.holidays.years.includes(state.month.slice(0,4))?'。此年份的香港公眾假期尚未公布／收錄。':''));
+  }catch(e){if(sequence===state.loading){if(hadSession&&!state.session){await reload();report('登入已失效，仍可查看公開月曆。',true);return;}try{
+      const {from,to}=range();const [categories,events]=await Promise.all([api('/api/categories'),api('/api/calendar?from='+from+'&to='+to)]);
+      if(sequence!==state.loading)return;
+      setReadOnly(true,events.backup_saved_at||categories.backup_saved_at||new Date().toISOString());
+      state.categories=categories.categories;state.events=events.events.map(({notes,...event})=>event);
+      renderFilters();renderCalendar();report('唯讀備份',true);
+    }catch{state.events=[];setReadOnly(true);renderCalendar();report(e.message,true);}}}
   finally{if(sequence===state.loading)$('refresh').disabled=false;}
 }
 async function allAdminRows(key){
@@ -244,6 +264,7 @@ function dateTypes(){
   }
 }
 function openEditor(e=null,r=null,scope='series'){
+  if(state.readOnly){report('目前為唯讀模式，服務恢復後才能編輯。',true);return;}
   if(!state.session){$('loginDialog').showModal();return;}
   $('detailDialog').close();$('eventForm').reset();state.editing={event:e,rule:r,scope};$('eventError').textContent='';
   $('editorTitle').textContent=!e?'新增活動':scope==='single'?'只修改這一次':r?'修改整個系列':'編輯活動';
@@ -268,6 +289,7 @@ function eventFromForm(){
     category_id:f.category_id.value||null,location:f.location.value,description:f.description.value,notes:f.notes.value};
 }
 async function mutate(action){
+  if(state.readOnly)throw Error('目前為唯讀模式，服務恢復後才能儲存。');
   if(state.mutating)return;state.mutating=true;
   try{await action();await reload();return true;}finally{state.mutating=false;}
 }
@@ -276,7 +298,7 @@ function showDetails(e){
   const fields=[['開始',detailDateTime(e.start_at,e.all_day)],['結束',detailDateTime(e.end_at,e.all_day)],['地點',e.location],['分類',e.category_name],['描述',e.description],['備註',e.notes]];
   const dl=node('dl');for(const [label,value] of fields)if(value)dl.append(node('dt',label),node('dd',value));body.append(dl);
   const actions=$('detailActions');actions.replaceChildren();
-  if(state.session){
+  if(state.session&&!state.readOnly){
     const original=state.adminEvents.find(x=>x.id===(e.event_id||e.id)),r=state.rules.find(x=>x.id===e.recurrence_rule_id);
     if(e.is_recurring){
       actions.append(button('只修改這一次',()=>openEditor(e,r,'single')),button('修改整個系列',()=>openEditor(original,r)),
@@ -547,3 +569,5 @@ window.addEventListener("resize", updateCalendarViewport);
 window.addEventListener("pageshow", updateCalendarViewport);
 window.visualViewport?.addEventListener("resize", updateCalendarViewport);
 window.visualViewport?.addEventListener("scroll", updateCalendarViewport);
+
+if('serviceWorker' in navigator&&!preview)navigator.serviceWorker.register('./sw.js').catch(()=>{});
