@@ -10,6 +10,7 @@ test('release packaging refreshes changed assets and excludes private source fil
   try {
     await mkdir(join(fixture, 'scripts'));
     await copyFile(new URL('../scripts/build-site.mjs', import.meta.url), join(fixture, 'scripts/build-site.mjs'));
+    await copyFile(new URL('../offline-sw.mjs', import.meta.url), join(fixture, 'offline-sw.mjs'));
     await writeFile(join(fixture, 'package.json'), '{"type":"module"}');
     await writeFile(join(fixture, 'index.html'),
       '<link rel="stylesheet" href="./assets/calendar.css?v=old"><script src="./assets/app.js?v=old"></script>');
@@ -38,7 +39,7 @@ test('release packaging refreshes changed assets and excludes private source fil
     assert.notEqual(secondCss, firstCss);
     assert.equal(secondScript, firstScript);
     assert.deepEqual((await readdir(join(fixture, 'dist'))).sort(),
-      ['_headers', 'assets', 'index.html', 'manifest.webmanifest']);
+      ['_headers', 'assets', 'index.html', 'manifest.webmanifest', 'sw.js']);
     assert.match(await readFile(join(fixture, 'dist/_headers'), 'utf8'), /Cache-Control: no-store/);
   } finally {
     if (!resolve(fixture).startsWith(resolve(tmpdir()))) throw Error('Unsafe test cleanup path');
